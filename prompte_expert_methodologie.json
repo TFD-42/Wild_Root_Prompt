@@ -1,0 +1,102 @@
+Here are 100 prompt engineering methods to force an LLM into producing a fully developed, exhaustive answer (similar to a multi-turn output in a single response). Each entry includes a two‑phrase summary.
+
+1. **Step‑by‑step instruction** – Explicitly ask the model to “think step by step” before answering. Forces internal reasoning and prevents premature conclusions.  
+2. **Output length specification** – Demand a minimum number of words, sentences, or paragraphs. Eliminates one‑line or shallow responses.  
+3. **Chain‑of‑thought (CoT) priming** – Provide a partial reasoning example, then ask the model to continue. Guarantees a fully articulated logic path.  
+4. **Structured template** – Give a skeleton with headings like “Context / Analysis / Conclusion”. The model must fill every section completely.  
+5. **Forced reframing** – “Before answering, rephrase the question in your own words.” Ensures the model engages deeply with the query.  
+6. **Multi‑perspective instruction** – “Answer from the viewpoints of an expert, a critic, and a novice.” Produces a richer, multi‑faceted reply.  
+7. **Exhaustive enumeration request** – “List every possible reason / factor / example, no matter how minor.” Prevents cherry‑picking of obvious points.  
+8. **Anti‑lazy preamble** – Start with “Do not give a short answer. Develop each point thoroughly.” Sets a clear expectation of length and depth.  
+9. **Constraint‑based expansion** – “You must use at least five technical terms and two analogies.” Forces elaboration through linguistic requirements.  
+10. **Recursive deepening** – After each sub‑point, add “Explain that sub‑point in detail.” The model anticipates and includes nested elaborations.  
+11. **Role‑playing as a teacher** – “You are a professor lecturing a graduate seminar.” The role forces structured, detailed, didactic output.  
+12. **Counter‑argument inclusion** – “Present the strongest argument for and against, then synthesize.” Ensures balanced depth without omission.  
+13. **“No shortcuts” directive** – “Do not use phrases like ‘etc.’, ‘and so on’, or ‘in short’.” Blocks common brevity tricks.  
+14. **Example‑driven expansion** – “Give three distinct, real‑world examples for each main claim.” Forces concrete development of abstract points.  
+15. **Progressive disclosure simulation** – “Write as if you are revealing information in layers, starting with basics and ending with advanced nuances.”  
+16. **Socratic self‑questioning** – “After each sentence, ask yourself ‘Why is that true?’ and answer it.” Builds a self‑interrogating, full reply.  
+17. **Reverse engineering prompt** – “Start with the final conclusion, then explain every logical step that led to it.” Guarantees a complete backward chain.  
+18. **Forced outline then expansion** – “First produce a detailed outline (5–7 main points). Then use that outline to write the final answer.”  
+19. **Minimum threshold of citations** – “Support each factual claim with a hypothetical source or logical justification.” Prevents unsupported assertions.  
+20. **“Explain like I’m 5, then like I’m 20”** – Two‑tier explanation within one answer, ensuring both simplicity and depth.  
+21. **Adversarial interrogation** – “Imagine a hostile reader challenging every sentence. Preemptively address those challenges.”  
+22. **Timeline or process mapping** – “Present your answer as a chronological sequence of events or a decision tree.” Forces structural completeness.  
+23. **Forced numeric depth** – “Provide at least 7 distinct arguments. Label them 1 to 7.” A simple but effective quantity demand.  
+24. **Comparative analysis requirement** – “Compare your answer to two alternative viewpoints, highlighting differences.” Expands scope.  
+25. **Definition first** – “Begin by defining every key term you will use. Then proceed.” Locks in conceptual clarity before elaboration.  
+26. **Self‑correction loop** – “Write a draft answer, then list three weaknesses, then rewrite improving those weaknesses.” One‑response self‑iteration.  
+27. **Conditional branching** – “If X is true, explain scenario A; if Y is true, explain scenario B; cover all plausible conditions.” Forces exhaustive coverage.  
+28. **Historical grounding** – “Trace the evolution of this concept from its origin to current state.” Ensures longitudinal depth.  
+29. **Ethical / practical split** – “Separate your answer into ‘theoretically ideal’ and ‘practically feasible’ sections.” Doubles analytical dimensions.  
+30. **Metacognitive tagging** – “After each paragraph, add a one‑sentence meta‑comment on its reliability or certainty.” Prevents overconfident shortcuts.  
+31. **Forced lexical variety** – “Do not reuse the same adjective or verb more than twice.” Indirectly encourages longer, more descriptive text.  
+32. **Boundary exploration** – “Explain not only what is true, but also what is false or misleading about common beliefs on this topic.”  
+33. **“Unpack every abbreviation”** – “Whenever you use an acronym or shorthand, immediately spell it out and explain it.” Blocks dense, lazy condensation.  
+34. **Scenario‑based expansion** – “Answer for three different scenarios: best case, worst case, and most likely case.” Multiplies output length.  
+35. **Mathematical formalism** – If applicable, “Express your reasoning using equations or logical notation, then translate to plain language.”  
+36. **Pre‑mortem analysis** – “First assume your answer is wrong. Then explain why it might be wrong, then give the correct answer.” Depth through negation.  
+37. **Iterative refinement in one go** – “Write answer V1. Then write ‘Revision:’ and improve it. Then ‘Final:’ and polish.” Triples depth.  
+38. **Role as a journalist** – “You are writing a feature article. Include quotes, background, and a ‘what’s next’ section.” Genre forces completeness.  
+39. **Constraint of no single‑sentence paragraphs** – “Every paragraph must contain at least three sentences.” Avoids choppy, shallow structure.  
+40. **First‑principles reasoning** – “Start from the most basic, undisputed facts and build up.” Guarantees a thorough foundational exposition.  
+41. **Forced analogy generation** – “Explain the concept using two different analogies, then discuss the limits of each.” Adds comparative depth.  
+42. **Red team – blue team format** – “Present an argument (blue), then attack it (red), then defend it again (blue).” Three‑part exhaustive treatment.  
+43. **Explicit “what’s missing” section** – “At the end, add a paragraph on what your answer might have omitted or oversimplified.”  
+44. **Instruction to mimic a textbook** – “Write as a textbook chapter, including subheadings, key terms, and review questions.” Structural depth.  
+45. **Stepwise abstraction ladder** – “Explain at concrete level, then at intermediate level, then at abstract principle level.” Three layers of detail.  
+46. **Forced citation of counterexamples** – “For every general claim, provide a specific counterexample or exception.” Prevents overgeneralization.  
+47. **“As if you have no word limit”** – Direct psychological permission to be verbose, often effective with LLMs.  
+48. **Time‑scale decomposition** – “Explain short‑term (1 year), medium‑term (5 years), and long‑term (20+ years) implications.”  
+49. **Responsibility disclaimer mimicry** – “Write a ‘for completeness’ section that would satisfy a legal review.” Encourages over‑specification.  
+50. **Cross‑disciplinary requirement** – “Incorporate perspectives from at least two different fields (e.g., economics and psychology).”  
+51. **“Show your work” directive** – Borrowed from math: “Show every intermediate calculation, inference, or data transformation.”  
+52. **Contrast with a strawman** – “First describe a weak, surface‑level answer, then explain why it’s insufficient, then give the full answer.”  
+53. **Force a taxonomy** – “Create a classification tree of all possible types / categories, then discuss each branch.” Systematic exhaustiveness.  
+54. **Question‑backed paragraphs** – “Begin each paragraph with a rhetorical question, then answer it in the paragraph.” Self‑driven depth.  
+55. **Two‑pass generation instruction** – “Write a quick draft, then rewrite it doubling the details and examples.” Done internally by the model.  
+56. **“Assume the reader is skeptical and well‑informed”** – Raises the bar for justification and evidence.  
+57. **Forced use of transitional phrases** – “Use ‘furthermore’, ‘consequently’, ‘on the other hand’ at least 5 times each.” Encourages elaborated connections.  
+58. **Checklist output format** – “Present your answer as a markdown checklist, where each item is a sub‑explanation.” Forces itemized completeness.  
+59. **Reverse chronological order** – “Start with the most recent development, then go backward to origins.” Unusual structure forces fuller coverage.  
+60. **Five‑whys integration** – “After each major statement, ask ‘Why?’ and answer it, repeating five times.” Deep causal chains.  
+61. **Forced uncertainty quantification** – “Assign a confidence percentage to each claim and explain your reasoning for that percentage.”  
+62. **Dialogue reconstruction** – “Write a mock conversation between two experts debating the topic, then summarize the consensus.”  
+63. **Pre‑defined section count** – “Your answer must have exactly 10 sections, each with a title and at least 100 words.” Hard structural demand.  
+64. **“No bullet points unless each bullet has three sub‑bullets”** – Prevents shallow lists.  
+65. **Meta‑instruction repeat** – “At the start of your answer, repeat the instruction: ‘I will produce an exhaustive, fully developed response.’” Self‑priming.  
+66. **Forced non‑linear inclusion** – “Include a tangent on an apparently unrelated topic, then explain how it connects back.” Expands scope unexpectedly.  
+67. **Resource‑based expansion** – “Assume you have access to unlimited time and computational resources. Answer accordingly.”  
+68. **Lexical density requirement** – “Use at least 10 words of Latin or Greek origin per sentence.” Indirectly increases complexity and length.  
+69. **Predictive elaboration** – “Answer the question, then predict how the answer might change in 10 years due to new discoveries.”  
+70. **Error‑driven deepening** – “First, intentionally write a plausible but incomplete answer. Then point out its flaws and write the correct version.”  
+71. **Audience layering** – “Write for three audiences: a child, an undergraduate, and a fellow expert. Combine them in one response.”  
+72. **Forced data inclusion** – “Invent realistic data points (with caveats) to support each quantitative claim.” Prevents vague hand‑waving.  
+73. **“Finish with an unresolved question”** – “End your answer by posing a deep, related question that remains open.” Shows reflective depth.  
+74. **Cyclical reasoning display** – “Show a complete loop of reasoning: hypothesis → test → evidence → revised hypothesis.”  
+75. **Instruction to avoid “firstly, secondly” patterns** – Forces more creative and elaborate connective structures.  
+76. **Scenario tree expansion** – “Draw a decision tree (in text) of possible paths, then explain the reasoning at each branch.”  
+77. **Forced historical precedent** – “Find and explain two historical events that parallel this situation.” Adds comparative depth.  
+78. **Role as a devil’s advocate** – “Argue against the most common answer, then reconcile.” Expands via opposition.  
+79. **Minimum number of cause‑effect links** – “Identify at least five cause‑effect chains in your answer, each with explicit ‘because’.”  
+80. **“Explain the same thing twice using different metaphors”** – Repetition with variation enforces thoroughness.  
+81. **Forced external referencing** – “Mention three hypothetical books or papers that would support your argument, with imagined titles and authors.”  
+82. **Step‑back abstraction before details** – “First state the high‑level principle, then spend 80% of your answer on concrete applications.”  
+83. **“If you had to teach this to a class over 1 hour, what would you say?”** – Time‑based expansion cue.  
+84. **Semantic differential scaling** – “Rate your answer on 5 dimensions (accuracy, clarity, completeness) and justify each rating.”  
+85. **Forced negative space exploration** – “Explain what this topic is *not*, providing at least 5 clear distinctions.”  
+86. **Tiered evidence requirement** – “Provide anecdotal, empirical, and theoretical support for each main claim.”  
+87. **Recursive “why this matters”** – “After each paragraph, add a sentence on ‘why this is important to the overall question’.”  
+88. **Algorithmic step‑by‑step** – “Pretend you are a computer executing a program. List each line of reasoning as a numbered instruction.”  
+89. **Forced self‑interruption** – “Write a sentence, then write ‘But wait, that’s not complete because…’ and continue.”  
+90. **Lexical restriction with compensation** – “Avoid all forms of ‘to be’ (is, are, was). Rewriting forces more descriptive verbs and longer clauses.  
+91. **Calibrated uncertainty ranges** – “Give best‑estimate, low‑estimate, and high‑estimate for any numerical or probabilistic claim.”  
+92. **Hypothetical objection loop** – “Anticipate three objections to your answer, respond to each, then revise your original statement.”  
+93. **Literal timeline construction** – “Arrange your answer as a timeline from t=0 to t=∞, marking key milestones.”  
+94. **“Rewrite from memory” simulation** – “Pretend you cannot look back. Write the answer as if reconstructing it from memory, which forces reiteration.”  
+95. **Contrasting schools of thought** – “Present the answer as a debate between two named theoretical frameworks (e.g., Keynesian vs. Monetarist).”  
+96. **Forced use of “because” clause in every sentence** – Grammatically enforces justification and elaboration.  
+97. **Pre‑answer meta‑analysis** – “Before answering, list 5 criteria for a ‘good’ answer. Then ensure your answer meets all 5.”  
+98. **Narrative embedding** – “Wrap your answer in a story about a person encountering this problem, using the story to introduce each subtopic.”  
+99. **Forced redundancy with variation** – “State the core conclusion three times, each time with different supporting evidence.”  
+100. **Zero‑shot CoT with self‑reminder** – “Write ‘I will now produce a complete, exhaustive answer. No shortcuts.’ then proceed.” Reinforces the goal directly.
