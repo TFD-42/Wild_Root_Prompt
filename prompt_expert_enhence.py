@@ -56,7 +56,7 @@ DEFAULT_TIMEOUT = 600  # seconds for a single Ollama call
 SYNTH_TIMEOUT = 1200   # longer timeout for synthesis
 
 # Technique appliquées par défaut (peuvent être réglées via CLI)
-DEFAULT_TECHNIQUES = [1, 5, 8, 10, 12, 14, 18, 25, 40, 47]  # Ensemble minimal de techniques utiles
+DEFAULT_TECHNIQUES = [1, 5, 8, 10, 12, 14, 18, 25, 40, 47, 108, 121, 125, 147, 153]
 
 # Create directories at import time
 MEMORY_DIR.mkdir(exist_ok=True)
@@ -64,23 +64,37 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Load methodologies from JSON
 TECHNIQUES_DB: Dict[int, Dict[str, str]] = {}
+CATEGORIES_DB: List[Dict] = []
+ANTI_PATTERNS: List[Dict] = []
+QUICK_REFERENCE: Dict[str, List[int]] = {}
+
 def load_methodologies():
-    global TECHNIQUES_DB
-    if METHODOLOGY_FILE.exists():
-        try:
-            text = METHODOLOGY_FILE.read_text(encoding="utf-8")
-            # Parse JSON-like structure: line = "1. **title** – description"
-            lines = text.strip().split("\n")
-            for line in lines:
+    global TECHNIQUES_DB, CATEGORIES_DB, ANTI_PATTERNS, QUICK_REFERENCE
+    if not METHODOLOGY_FILE.exists():
+        return
+    try:
+        raw = METHODOLOGY_FILE.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        if "categories" in data:
+            CATEGORIES_DB = data["categories"]
+            for cat in CATEGORIES_DB:
+                for tech in cat.get("techniques", []):
+                    TECHNIQUES_DB[tech["id"]] = {
+                        "title": tech["title"],
+                        "description": tech["description"],
+                        "category": cat["name"],
+                    }
+            ANTI_PATTERNS = data.get("anti_patterns", [])
+            QUICK_REFERENCE = data.get("quick_reference", {}).get("mappings", {})
+        else:
+            for line in raw.strip().split("\n"):
                 if line and line[0].isdigit():
                     match = re.match(r"(\d+)\.\s+\*\*(.+?)\*\*\s+–\s+(.+)", line)
                     if match:
                         num = int(match.group(1))
-                        title = match.group(2)
-                        desc = match.group(3)
-                        TECHNIQUES_DB[num] = {"title": title, "description": desc}
-        except Exception as e:
-            logger.warning(f"Could not load methodologies: {e}")
+                        TECHNIQUES_DB[num] = {"title": match.group(2), "description": match.group(3)}
+    except Exception as e:
+        logger.warning(f"Could not load methodologies: {e}")
 
 load_methodologies()
 
@@ -123,77 +137,77 @@ def is_ollama_running() -> bool:
 def install_ollama_interactive() -> bool:
     os_type = detect_os()
     print()
-    print("  [!] Ollama n'est pas installe sur cette machine.")
-    print(f"  OS detecte : {os_type}")
+    print("  [!] Ollama is not installed on this machine.")
+    print(f"  Detected OS: {os_type}")
     print()
     if os_type == "mac":
-        print("  Options d'installation :")
-        print("    1. Curl automatique (recommande)")
-        print("    2. Annuler")
-        c = input("  Choix > ").strip()
+        print("  Installation options:")
+        print("    1. Automatic curl install (recommended)")
+        print("    2. Cancel")
+        c = input("  Choice > ").strip()
         if c != "1":
             return False
-        print("\n  Installation en cours ...")
+        print("\n  Installing ...")
         try:
             subprocess.run(
                 ["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
                 check=True,
             )
-            print("  Ollama installe avec succes.")
+            print("  Ollama installed successfully.")
             return True
         except subprocess.CalledProcessError as e:
-            print(f"  [ERREUR] Installation echouee : {e}")
+            print(f"  [ERROR] Installation failed: {e}")
             return False
     elif os_type == "linux":
-        print("  Options d'installation :")
-        print("    1. Curl automatique (recommande)")
-        print("    2. Annuler")
-        c = input("  Choix > ").strip()
+        print("  Installation options:")
+        print("    1. Automatic curl install (recommended)")
+        print("    2. Cancel")
+        c = input("  Choice > ").strip()
         if c != "1":
             return False
-        print("\n  Installation en cours ...")
+        print("\n  Installing ...")
         try:
             subprocess.run(
                 ["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
                 check=True,
             )
-            print("  Ollama installe avec succes.")
+            print("  Ollama installed successfully.")
             return True
         except subprocess.CalledProcessError as e:
-            print(f"  [ERREUR] Installation echouee : {e}")
+            print(f"  [ERROR] Installation failed: {e}")
             return False
     elif os_type == "windows":
-        print("  Installation automatique Windows :")
-        print("    1. Telecharger et lancer l'installeur (winget)")
-        print("    2. Annuler")
-        c = input("  Choix > ").strip()
+        print("  Windows automatic installation:")
+        print("    1. Download and run installer (winget)")
+        print("    2. Cancel")
+        c = input("  Choice > ").strip()
         if c != "1":
             return False
-        print("\n  Installation via winget ...")
+        print("\n  Installing via winget ...")
         try:
             subprocess.run(
                 ["winget", "install", "Ollama.Ollama", "--accept-source-agreements", "--accept-package-agreements"],
                 check=True,
             )
-            print("  Ollama installe avec succes.")
-            print("  [!] Redemarrage du terminal peut etre necessaire.")
+            print("  Ollama installed successfully.")
+            print("  [!] Terminal restart may be required.")
             return True
         except FileNotFoundError:
-            print("  [!] winget non disponible. Tentative avec curl PowerShell ...")
+            print("  [!] winget not available. Trying PowerShell fallback ...")
             try:
                 subprocess.run(
                     ["powershell", "-Command",
                      "Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile '$env:TEMP\\OllamaSetup.exe'; Start-Process '$env:TEMP\\OllamaSetup.exe' -Wait"],
                     check=True,
                 )
-                print("  Installeur lance. Attends la fin de l'installation.")
+                print("  Installer launched. Wait for installation to complete.")
                 return True
             except Exception as e2:
-                print(f"  [ERREUR] {e2}")
-                print("  Installe manuellement : https://ollama.com/download")
+                print(f"  [ERROR] {e2}")
+                print("  Install manually: https://ollama.com/download")
                 return False
         except subprocess.CalledProcessError as e:
-            print(f"  [ERREUR] {e}")
+            print(f"  [ERROR] {e}")
             return False
     return False
 
@@ -201,7 +215,7 @@ def install_ollama_interactive() -> bool:
 def start_ollama_serve():
     if is_ollama_running():
         return
-    print("  Demarrage d'Ollama en arriere-plan ...")
+    print("  Starting Ollama in background ...")
     os_type = detect_os()
     try:
         if os_type == "windows":
@@ -221,11 +235,11 @@ def start_ollama_serve():
         for _ in range(15):
             time.sleep(1)
             if is_ollama_running():
-                print("  Ollama est pret.")
+                print("  Ollama is ready.")
                 return
-        print("  [!] Ollama demarre mais pas encore pret. Poursuite quand meme.")
+        print("  [!] Ollama started but not ready yet. Continuing anyway.")
     except Exception as e:
-        print(f"  [!] Impossible de demarrer Ollama : {e}")
+        print(f"  [!] Could not start Ollama: {e}")
 
 
 def list_local_models() -> List[Dict[str, str]]:
@@ -250,8 +264,8 @@ def list_local_models() -> List[Dict[str, str]]:
 
 
 def pull_model_interactive(model_name: str) -> bool:
-    print(f"\n  Telechargement du modele '{model_name}' ...")
-    print("  (Cela peut prendre plusieurs minutes selon la taille)")
+    print(f"\n  Downloading model '{model_name}' ...")
+    print("  (This may take several minutes depending on size)")
     print()
     try:
         proc = subprocess.Popen(
@@ -268,16 +282,16 @@ def pull_model_interactive(model_name: str) -> bool:
         proc.wait()
         print()
         if proc.returncode == 0:
-            print(f"  Modele '{model_name}' telecharge avec succes.")
+            print(f"  Model '{model_name}' downloaded successfully.")
             return True
         else:
-            print(f"  [ERREUR] ollama pull a retourne le code {proc.returncode}")
+            print(f"  [ERROR] ollama pull returned code {proc.returncode}")
             return False
     except FileNotFoundError:
-        print("  [ERREUR] La commande 'ollama' n'est pas trouvee.")
+        print("  [ERROR] 'ollama' command not found.")
         return False
     except Exception as e:
-        print(f"  [ERREUR] {e}")
+        print(f"  [ERROR] {e}")
         return False
 
 
@@ -286,13 +300,13 @@ def pick_model_interactive(label: str, current: str) -> str:
     print()
     if models:
         print(f"  -- {label} --")
-        print(f"  Modeles installes localement :")
+        print(f"  Locally installed models:")
         for i, m in enumerate(models, 1):
-            marker = " <-- actuel" if m["name"] == current else ""
+            marker = " <-- current" if m["name"] == current else ""
             print(f"    {i:3d}. {m['name']:<30s}  {m['size']:>6s}  {m['modified']}{marker}")
-        print(f"    {len(models)+1:3d}. [Entrer un nom manuellement / pull un nouveau modele]")
+        print(f"    {len(models)+1:3d}. [Enter a name manually / pull a new model]")
         print()
-        raw = input(f"  Choix [{current}] > ").strip()
+        raw = input(f"  Choice [{current}] > ").strip()
         if not raw:
             return current
         try:
@@ -305,36 +319,36 @@ def pick_model_interactive(label: str, current: str) -> str:
             raw = ""
     else:
         print(f"  -- {label} --")
-        print("  Aucun modele installe localement.")
+        print("  No models installed locally.")
         print()
         raw = ""
 
     if not raw:
-        name = input(f"  Nom du modele a utiliser (ex: llama3:latest, qwen2.5:7b) [{current}] > ").strip()
+        name = input(f"  Model name (e.g. llama3:latest, qwen2.5:7b) [{current}] > ").strip()
         if not name:
             return current
         raw = name
 
     local_names = [m["name"] for m in models]
     if raw not in local_names:
-        print(f"\n  Le modele '{raw}' n'est pas installe localement.")
-        do_pull = input("  Telecharger maintenant ? (oui/non) [oui] > ").strip().lower()
-        if do_pull in ("", "oui", "o", "yes", "y", "1"):
+        print(f"\n  Model '{raw}' is not installed locally.")
+        do_pull = input("  Download now? (yes/no) [yes] > ").strip().lower()
+        if do_pull in ("", "yes", "y", "oui", "o", "1"):
             if pull_model_interactive(raw):
                 return raw
             else:
-                print(f"  Utilisation du modele precedent : {current}")
+                print(f"  Using previous model: {current}")
                 return current
         else:
-            print(f"  [!] Le modele '{raw}' sera utilise tel quel (erreur possible si absent).")
+            print(f"  [!] Model '{raw}' will be used as-is (may fail if not available).")
     return raw
 
 
 def ensure_ollama_ready():
     if not is_ollama_installed():
         if not install_ollama_interactive():
-            print("\n  [!] Ollama n'est pas disponible. Les generations vont echouer.")
-            print("  Installe manuellement : https://ollama.com/download")
+            print("\n  [!] Ollama is not available. Generation will fail.")
+            print("  Install manually: https://ollama.com/download")
             return
     if not is_ollama_running():
         start_ollama_serve()
@@ -344,25 +358,25 @@ def ensure_ollama_ready():
 # Meta‑prompts (unchanged from original, kept for brevity)
 # ----------------------------------------------------------------------
 META_PROMPT = """
-# META-PROMPT : GENERATEUR DE MANIFESTE D'INSTRUCTION REPRODUCTIBLE
+# META-PROMPT: REPRODUCIBLE INSTRUCTION MANIFEST GENERATOR
 
-> Usage : Copie ce meta-prompt dans n'importe quel agent LLM, puis fournis-lui ta tache dans la section INPUT_UTILISATEUR. Il produira un manifeste-instruction complet, niveau expert prompt engineer, qu'un autre agent LLM pourra executer sans contexte prealable.
+> Usage: Paste this meta-prompt into any LLM agent, then provide your task in the USER_INPUT section. It will produce a complete, expert-level instruction manifest that another LLM agent can execute without prior context.
 
 ---
 
 ## ROLE
 
-Tu es un architecte de prompts senior specialise dans la production de manifestes d'instruction reproductibles. Ta mission n'est jamais d'ecrire du code ni d'executer la tache. Ta mission est de produire un document-manifeste qui decrit la tache avec une telle precision methodologique qu'un autre agent LLM (Claude, GPT, Gemini, Llama, Mistral, Qwen) puisse la reproduire integralement avec ses propres methodes d'implementation.
+You are a senior prompt architect specializing in producing reproducible instruction manifests. Your mission is never to write code or execute the task. Your mission is to produce a manifest document that describes the task with such methodological precision that another LLM agent (Claude, GPT, Gemini, Llama, Mistral, Qwen) can reproduce it entirely using its own implementation methods.
 
-Tu ecris comme un redacteur de RFC, de spec produit, ou d'article technique - pas comme un developpeur. Tu decris le QUOI, le POURQUOI, le DANS QUEL ORDRE, et le COMMENT-CONCEPTUEL - jamais le COMMENT-SYNTAXIQUE.
+You write like an RFC author, product spec writer, or technical article author — not like a developer. You describe the WHAT, the WHY, the IN WHAT ORDER, and the CONCEPTUAL-HOW — never the SYNTACTIC-HOW.
 
 ---
 
-## ENTREE UTILISATEUR
+## USER INPUT
 
-<<<INPUT_UTILISATEUR
+<<<USER_INPUT
 {USER_INPUT}
-INPUT_UTILISATEUR>>>
+USER_INPUT>>>
 
 {TOPIC_FOCUS}
 
@@ -372,113 +386,113 @@ INPUT_UTILISATEUR>>>
 
 ---
 
-## REGLES ABSOLUES DE SORTIE
+## ABSOLUTE OUTPUT RULES
 
-1. Zero ligne de code. Aucun bloc de code. Aucune commande shell brute. Aucune syntaxe d'API.
-2. Reproductibilite totale. Un agent LLM different doit pouvoir reproduire le resultat.
-3. Agnostique d'implementation.
-4. Style manifeste / article / spec. Sections numerotees, titres clairs.
-5. Niveau expert. Anticipe les edge cases, les pieges, les ambiguites.
-6. Auto-diagnostic d'ambiguite si l'entree est ambigue.
-7. Aucune limite de longueur : ecris autant que necessaire pour epuiser le sujet.
-
----
-
-## STRUCTURE OBLIGATOIRE DU MANIFESTE GENERE
-
-Tu produis exactement les 12 sections suivantes, dans cet ordre :
-
-### § 1. TITRE & RESUME EXECUTIF
-### § 2. OBJECTIF FINAL & DEFINITION DE SUCCES
-### § 3. CONTEXTE D'EXECUTION & PREREQUIS
-### § 4. ZONES D'AMBIGUITE A LEVER
-### § 5. DECOMPOSITION EN ETAPES (PIPELINE DETAILLE)
-### § 6. BOUCLES DE CONTROLE & SCORING
-### § 7. ARTEFACTS PERSISTANTS A MAINTENIR
-### § 8. CONTRAINTES & GARDE-FOUS
-### § 9. STRATEGIE DE GESTION D'ERREUR
-### § 10. LIVRABLE FINAL & FORMAT DE RESTITUTION
-### § 11. CHECKLIST DE REPRODUCTIBILITE
-### § 12. NOTES POUR L'AGENT DESTINATAIRE
+1. Zero lines of code. No code blocks. No raw shell commands. No API syntax.
+2. Total reproducibility. A different LLM agent must be able to reproduce the result.
+3. Implementation-agnostic.
+4. Manifest / article / spec style. Numbered sections, clear headings.
+5. Expert level. Anticipate edge cases, pitfalls, and ambiguities.
+6. Self-diagnose ambiguity if the input is ambiguous.
+7. No length limit: write as much as necessary to exhaust the subject.
 
 ---
 
-## INTERDICTIONS STRICTES
+## MANDATORY STRUCTURE OF THE GENERATED MANIFEST
 
-- Aucun bloc de code, quelle que soit la justification.
-- Aucune commande shell, requete SQL, appel d'API en syntaxe brute.
-- Aucun TODO ou "a completer".
-- Aucune mention de toi-meme en tant que generateur.
-- Aucun emoji decoratif. Signes acceptes : carre vide pour checklist, fleche pour transitions, § pour sections.
+You produce exactly the following 12 sections, in this order:
+
+### § 1. TITLE & EXECUTIVE SUMMARY
+### § 2. FINAL OBJECTIVE & SUCCESS DEFINITION
+### § 3. EXECUTION CONTEXT & PREREQUISITES
+### § 4. AMBIGUITY ZONES TO RESOLVE
+### § 5. STEP DECOMPOSITION (DETAILED PIPELINE)
+### § 6. CONTROL LOOPS & SCORING
+### § 7. PERSISTENT ARTIFACTS TO MAINTAIN
+### § 8. CONSTRAINTS & GUARDRAILS
+### § 9. ERROR HANDLING STRATEGY
+### § 10. FINAL DELIVERABLE & OUTPUT FORMAT
+### § 11. REPRODUCIBILITY CHECKLIST
+### § 12. NOTES FOR THE TARGET AGENT
 
 ---
 
-Ne produis que le manifeste final. Aucun preambule. Aucune conclusion. Le manifeste commence directement par "## § 1. TITRE & RESUME EXECUTIF".
+## STRICT PROHIBITIONS
+
+- No code blocks, regardless of justification.
+- No shell commands, SQL queries, or raw API calls.
+- No TODOs or "to be completed".
+- No mention of yourself as the generator.
+- No decorative emojis. Accepted symbols: empty square for checklists, arrow for transitions, § for sections.
+
+---
+
+Only produce the final manifest. No preamble. No conclusion. The manifest starts directly with "## § 1. TITLE & EXECUTIVE SUMMARY".
 """
 
 SYNTH_PROMPT = """
 # ROLE
-Tu es un META-ARCHITECTE de prompts, expert senior en ingenierie d'instructions LLM/AI/AGI, charge de produire une SYNTHESE FINALE sans aucune limite de longueur.
+You are a META-ARCHITECT of prompts, senior expert in LLM/AI/AGI instruction engineering, tasked with producing a FINAL SYNTHESIS with no length limit.
 
 # MISSION
-Tu disposes de deux manifestes d'instruction generes par deux modeles distincts (MODELE A et MODELE B) sur la meme tache utilisateur. Tu dois :
+You have two instruction manifests generated by two distinct models (MODEL A and MODEL B) on the same user task. You must:
 
-1. ANALYSE COMPARATIVE : passer en revue les deux manifestes, identifier les points de convergence, les divergences, les omissions, les forces et faiblesses respectives.
-2. PLAN DIRECTEUR : produire un plan global structure, exhaustif, hierarchise.
-3. SYNTHESE UNIFIEE : fusionner et enrichir les deux manifestes en un document maitre superieur a chacun des deux, en gardant le meilleur de chaque, en comblant les manques, en ajoutant les angles morts qu'aucun des deux n'a vus.
-4. PROMPT-INSTRUCTION FINAL : a la fin, produire un prompt-instruction expert, de qualite professionnelle, pret a etre injecte tel quel dans un autre agent LLM (Claude, GPT, Gemini, etc.) pour executer la tache au plus haut niveau.
+1. COMPARATIVE ANALYSIS: review both manifests, identify convergence points, divergences, omissions, and respective strengths and weaknesses.
+2. MASTER PLAN: produce a structured, exhaustive, prioritized global plan.
+3. UNIFIED SYNTHESIS: merge and enrich both manifests into a master document superior to either one, keeping the best of each, filling gaps, and adding blind spots that neither one saw.
+4. FINAL EXPERT PROMPT-INSTRUCTION: at the end, produce a professional-quality expert prompt-instruction, ready to be injected as-is into another LLM agent (Claude, GPT, Gemini, etc.) to execute the task at the highest level.
 
-# REGLES
-- Aucune limite de longueur : ecris autant que necessaire, sois exhaustif.
-- Aucun emoji unicode decoratif.
-- Aucun bloc de code executable.
-- Style : technique, dense, professionnel, niveau expert AGI prompt engineer.
-- Structure obligatoire (sections numerotees ci-dessous).
+# RULES
+- No length limit: write as much as necessary, be exhaustive.
+- No decorative unicode emojis.
+- No executable code blocks.
+- Style: technical, dense, professional, AGI prompt engineer expert level.
+- Mandatory structure (numbered sections below).
 
-# STRUCTURE OBLIGATOIRE DE TA SORTIE
+# MANDATORY OUTPUT STRUCTURE
 
-## PARTIE I - ANALYSE COMPARATIVE
-### I.1 Convergences entre les deux manifestes
-### I.2 Divergences notables
-### I.3 Omissions et angles morts detectes
-### I.4 Score qualitatif par section (tableau)
+## PART I - COMPARATIVE ANALYSIS
+### I.1 Convergences between the two manifests
+### I.2 Notable divergences
+### I.3 Detected omissions and blind spots
+### I.4 Qualitative score by section (table)
 
-## PARTIE II - PLAN DIRECTEUR UNIFIE
-### II.1 Vision et objectifs strategiques
-### II.2 Phases majeures
-### II.3 Dependances et ordonnancement
-### II.4 Risques critiques et mitigation
+## PART II - UNIFIED MASTER PLAN
+### II.1 Vision and strategic objectives
+### II.2 Major phases
+### II.3 Dependencies and sequencing
+### II.4 Critical risks and mitigation
 
-## PARTIE III - MANIFESTE SYNTHETIQUE ENRICHI
-Reprend les 12 sections classiques (§ 1 a § 12) en version unifiee, enrichie et superieure aux deux entrees.
+## PART III - ENRICHED SYNTHETIC MANIFEST
+Covers the 12 standard sections (§ 1 to § 12) in a unified, enriched version superior to both inputs.
 
-## PARTIE IV - PROMPT-INSTRUCTION EXPERT FINAL
-Un prompt clef en main, autoporteur, sans contexte externe requis, pret a etre colle dans n'importe quel agent LLM pour resoudre la tache. Niveau prompt engineer senior. Inclure : role, contexte, contraintes, methodologie, critere de succes, boucles d'auto-verification, format de livrable.
+## PART IV - FINAL EXPERT PROMPT-INSTRUCTION
+A turnkey, self-contained prompt requiring no external context, ready to be pasted into any LLM agent to solve the task. Senior prompt engineer level. Include: role, context, constraints, methodology, success criteria, self-verification loops, deliverable format.
 
-## PARTIE V - NOTES META
-Conseils strategiques pour l'agent destinataire, pieges connus, optimisations possibles.
+## PART V - META NOTES
+Strategic advice for the target agent, known pitfalls, possible optimizations.
 
-# ENTREES
+# INPUTS
 
-## TACHE UTILISATEUR D'ORIGINE
-<<<TACHE
+## ORIGINAL USER TASK
+<<<TASK
 {USER_INPUT}
-TACHE>>>
+TASK>>>
 
-## MANIFESTE DU MODELE A ({MODEL_A})
-<<<MANIFESTE_A
+## MODEL A MANIFEST ({MODEL_A})
+<<<MANIFEST_A
 {MANIFEST_A}
-MANIFESTE_A>>>
+MANIFEST_A>>>
 
-## MANIFESTE DU MODELE B ({MODEL_B})
-<<<MANIFESTE_B
+## MODEL B MANIFEST ({MODEL_B})
+<<<MANIFEST_B
 {MANIFEST_B}
-MANIFESTE_B>>>
+MANIFEST_B>>>
 
 {MEMORY_CONTEXT}
 
-# DEMARRE LA SYNTHESE MAINTENANT
-Commence directement par "## PARTIE I - ANALYSE COMPARATIVE". Aucun preambule.
+# START THE SYNTHESIS NOW
+Begin directly with "## PART I - COMPARATIVE ANALYSIS". No preamble.
 """
 
 # ----------------------------------------------------------------------
@@ -517,11 +531,11 @@ def build_memory_context(max_items: int = 3) -> str:
     sessions = mem.get("sessions", [])[-max_items:]
     if not sessions:
         return ""
-    lines = ["## CONTEXTE MEMOIRE (sessions anterieures, pour coherence)"]
+    lines = ["## MEMORY CONTEXT (previous sessions, for coherence)"]
     for s in sessions:
-        lines.append(f"- [{s.get('timestamp','?')}] Tache : {s.get('user_input','')[:200]}")
+        lines.append(f"- [{s.get('timestamp','?')}] Task: {s.get('user_input','')[:200]}")
         if s.get("topics"):
-            lines.append(f"  Topics traites : {', '.join(s['topics'])}")
+            lines.append(f"  Topics covered: {', '.join(s['topics'])}")
     return "\n".join(lines)
 
 
@@ -628,16 +642,16 @@ def build_web_context(task: str, topic: str = "", max_results: int = 3, max_page
     if not results:
         logger.info("No web results found.")
         return ""
-    lines = ["## CONTEXTE WEB (recherche automatique, pour enrichissement)"]
+    lines = ["## WEB CONTEXT (automatic search, for enrichment)"]
     pages_fetched = 0
     for r in results:
         lines.append(f"- [{r['title']}]({r.get('url', '')})")
         if r.get("snippet"):
-            lines.append(f"  Resume: {r['snippet']}")
+            lines.append(f"  Summary: {r['snippet']}")
         if pages_fetched < max_pages and r.get("url"):
             page_text = fetch_page_text(r["url"])
             if page_text:
-                lines.append(f"  Extrait: {page_text[:800]}")
+                lines.append(f"  Excerpt: {page_text[:800]}")
                 pages_fetched += 1
     logger.info(f"Web context: {len(results)} results, {pages_fetched} pages fetched.")
     return "\n".join(lines)
@@ -653,6 +667,7 @@ def query_ollama(
     num_predict: int = -1,
     timeout: int = DEFAULT_TIMEOUT,
     ollama_url: str = OLLAMA_URL,
+    num_ctx: int = 8192,
 ) -> str:
     payload = {
         "model": model,
@@ -661,7 +676,7 @@ def query_ollama(
         "options": {
             "temperature": temperature,
             "num_predict": num_predict,
-            "num_ctx": 8192,
+            "num_ctx": num_ctx,
         },
     }
     try:
@@ -685,6 +700,7 @@ def query_ollama_stream(
     timeout: int = DEFAULT_TIMEOUT,
     ollama_url: str = OLLAMA_URL,
     callback=None,
+    num_ctx: int = 8192,
 ):
     payload = {
         "model": model,
@@ -693,7 +709,7 @@ def query_ollama_stream(
         "options": {
             "temperature": temperature,
             "num_predict": num_predict,
-            "num_ctx": 8192,
+            "num_ctx": num_ctx,
         },
     }
     full_text = []
@@ -793,20 +809,28 @@ class DualPaneDisplay:
 
 
 def get_technique_boost(technique_ids: List[int]) -> str:
-    """Generate prompt enhancement block from selected techniques."""
+    """Generate prompt enhancement block from selected techniques, grouped by category."""
     if not technique_ids:
         return ""
-    blocks = []
+    by_cat: Dict[str, List[str]] = {}
     for tid in sorted(technique_ids):
         if tid in TECHNIQUES_DB:
             tech = TECHNIQUES_DB[tid]
-            blocks.append(f"- {tech['title']}: {tech['description']}")
-    if not blocks:
+            cat = tech.get("category", "Other")
+            by_cat.setdefault(cat, []).append(f"- {tech['title']}: {tech['description']}")
+    if not by_cat:
+        return ""
+    blocks = []
+    for cat_name, items in by_cat.items():
+        blocks.append(f"### {cat_name}")
+        blocks.extend(items)
+    blocks_str = "\n".join(blocks)
+    if not blocks_str:
         return ""
     return (
-        "## TECHNIQUES DE PROMPT ENGINEERING A APPLIQUER\n"
-        "Integre les methodes suivantes dans ta generation pour une qualite superieure:\n"
-        + "\n".join(blocks)
+        "## PROMPT ENGINEERING TECHNIQUES TO APPLY\n"
+        "Integrate the following methods into your generation for superior quality:\n"
+        + blocks_str
     )
 
 
@@ -821,8 +845,8 @@ def build_full_prompt(
     if topic.strip():
         topic_block = (
             "## FOCUS TOPIC\n"
-            f"Concentre integralement ce manifeste sur le topic suivant : '{topic.strip()}'. "
-            "Traite ce topic comme l'angle dominant, en allant au maximum de profondeur."
+            f"Focus this entire manifest on the following topic: '{topic.strip()}'. "
+            "Treat this topic as the dominant angle, going to maximum depth."
         )
     memory_block = build_memory_context() if use_memory else ""
     web_block = build_web_context(user_input, topic) if use_web else ""
@@ -832,8 +856,8 @@ def build_full_prompt(
             .replace("{TOPIC_FOCUS}", topic_block)
             .replace("{MEMORY_CONTEXT}", memory_block)
             .replace("{WEB_CONTEXT}", web_block)
-            .replace("---\n\n## ENTREE UTILISATEUR",
-                     f"{techniques_block}\n\n---\n\n## ENTREE UTILISATEUR"))
+            .replace("---\n\n## USER INPUT",
+                     f"{techniques_block}\n\n---\n\n## USER INPUT"))
 
 
 def split_topics(topics_raw: str) -> List[str]:
@@ -971,6 +995,9 @@ def run_synthesis(
     timeout: int,
     synthesis_model: str = DEFAULT_SYNTH_MODEL,
     techniques: Optional[List[int]] = None,
+    stream: bool = False,
+    model_a_name: str = "",
+    model_b_name: str = "",
 ) -> Tuple[str, Path]:
     """
     Generate a meta‑synthesis from two manifest texts.
@@ -980,21 +1007,39 @@ def run_synthesis(
         raise ValueError("Both manifests must contain text.")
     if manifest_a.startswith("[ERREUR") or manifest_b.startswith("[ERREUR"):
         raise ValueError("One of the manifests contains an error; cannot synthesise.")
-    
+
     techniques_block = get_technique_boost(techniques or DEFAULT_TECHNIQUES)
 
     memory_block = build_memory_context() if use_memory else ""
     prompt = (SYNTH_PROMPT
               .replace("{USER_INPUT}", user_input.strip() or "(not provided)")
-              .replace("{MODEL_A}", DEFAULT_MODEL_A)   # using the defaults for prompt clarity
-              .replace("{MODEL_B}", DEFAULT_MODEL_B)
+              .replace("{MODEL_A}", model_a_name or DEFAULT_MODEL_A)
+              .replace("{MODEL_B}", model_b_name or DEFAULT_MODEL_B)
               .replace("{MANIFEST_A}", manifest_a.strip())
               .replace("{MANIFEST_B}", manifest_b.strip())
               .replace("{MEMORY_CONTEXT}", memory_block)
-              .replace("# ENTREES", f"{techniques_block}\n\n# ENTREES"))
+              .replace("# INPUTS", f"{techniques_block}\n\n# INPUTS"))
+
+    ctx_size = max(16384, len(prompt) // 3)
 
     logger.info("Starting expert synthesis ...")
-    synthesis = query_ollama(synthesis_model, prompt, temperature, num_predict=-1, timeout=timeout, ollama_url=ollama_url)
+    if stream and sys.stdout.isatty():
+        print(f"\n{'='*62}")
+        print(f"  SYNTHESIS IN PROGRESS — {synthesis_model}")
+        print(f"{'='*62}\n")
+        def stream_print(token):
+            sys.stdout.write(token)
+            sys.stdout.flush()
+        synthesis = query_ollama_stream(
+            synthesis_model, prompt, temperature,
+            num_predict=-1, timeout=timeout, ollama_url=ollama_url,
+            callback=stream_print, num_ctx=ctx_size,
+        )
+        print("\n")
+    else:
+        synthesis = query_ollama(synthesis_model, prompt, temperature,
+                                 num_predict=-1, timeout=timeout, ollama_url=ollama_url,
+                                 num_ctx=ctx_size)
 
     session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_synth_" + uuid.uuid4().hex[:6]
     out_file = OUTPUT_DIR / f"{session_id}_synthesis.md"
@@ -1027,12 +1072,17 @@ def run_full_pipeline(
     techniques: Optional[List[int]] = None,
     use_web: bool = True,
     live_display: bool = False,
+    stream: bool = False,
 ):
     out_a, out_b, fa, fb = generate_parallel_both(
         user_input, topics_raw, temperature, use_memory, ollama_url, timeout,
         model_a, model_b, techniques, use_web, live_display,
     )
-    synthesis, fs = run_synthesis(user_input, out_a, out_b, temperature, use_memory, ollama_url, timeout, synthesis_model, techniques)
+    synthesis, fs = run_synthesis(
+        user_input, out_a, out_b, temperature, use_memory, ollama_url, timeout,
+        synthesis_model, techniques, stream=stream,
+        model_a_name=model_a, model_b_name=model_b,
+    )
     return out_a, out_b, fa, fb, synthesis, fs
 
 
@@ -1126,10 +1176,19 @@ def main():
     if hasattr(args, "list_techniques") and args.list_techniques:
         print("Available Prompt Engineering Techniques:")
         print("=" * 80)
-        for tid in sorted(TECHNIQUES_DB.keys()):
-            tech = TECHNIQUES_DB[tid]
-            print(f"{tid:3d}. {tech['title']}")
-            print(f"      {tech['description']}\n")
+        if CATEGORIES_DB:
+            for cat in CATEGORIES_DB:
+                print(f"\n[{cat['id'].upper()}] {cat['name']}")
+                print(f"{cat.get('description', '')}")
+                print("-" * 60)
+                for tech in cat.get("techniques", []):
+                    print(f"{tech['id']:3d}. {tech['title']}")
+                    print(f"      {tech['description']}\n")
+        else:
+            for tid in sorted(TECHNIQUES_DB.keys()):
+                tech = TECHNIQUES_DB[tid]
+                print(f"{tid:3d}. {tech['title']}")
+                print(f"      {tech['description']}\n")
         return
 
     use_memory = not args.no_memory if hasattr(args, "no_memory") else True
@@ -1245,7 +1304,7 @@ def prompt_int(label: str, default: int) -> int:
     try:
         return int(val)
     except ValueError:
-        print(f"    Valeur invalide, utilisation de {default}")
+        print(f"    Invalid value, using {default}")
         return default
 
 
@@ -1256,7 +1315,7 @@ def prompt_float(label: str, default: float) -> float:
     try:
         return float(val)
     except ValueError:
-        print(f"    Valeur invalide, utilisation de {default}")
+        print(f"    Invalid value, using {default}")
         return default
 
 
@@ -1274,39 +1333,39 @@ def print_banner(settings: dict):
     print("=" * 62)
     print(f"   Model A     : {settings['model_a']}")
     print(f"   Model B     : {settings['model_b']}")
-    print(f"   Synthese    : {settings['synthesis_model']}")
+    print(f"   Synthesis   : {settings['synthesis_model']}")
     print(f"   Temperature : {settings['temperature']}")
-    print(f"   Techniques  : {len(settings['techniques'])} actives")
+    print(f"   Techniques  : {len(settings['techniques'])} active / {len(TECHNIQUES_DB)} available")
     print(f"   Internet    : {inet}   Web enrichment : {web_st}   Streaming : {stream_st}")
     print("-" * 62)
 
 
 def print_menu():
     print()
-    print("  1.  Generation simple        (1 modele, streaming)")
-    print("  2.  Generation parallele      (2 modeles, split screen)")
-    print("  3.  Pipeline complet          (parallele + synthese)")
-    print("  4.  Synthese de 2 fichiers")
+    print("  1.  Single generation         (1 model, streaming)")
+    print("  2.  Parallel generation       (2 models, split screen)")
+    print("  3.  Full pipeline             (parallel + synthesis)")
+    print("  4.  Synthesize 2 files")
     print()
-    print("  5.  Configurer les modeles")
-    print("  6.  Configurer les techniques")
-    print("  7.  Voir les techniques disponibles")
-    print("  8.  Parametres avances        (temperature, timeout, url, web, stream)")
+    print("  5.  Configure models")
+    print("  6.  Configure techniques")
+    print("  7.  Browse available techniques")
+    print("  8.  Advanced settings          (temperature, timeout, url, web, stream)")
     print()
-    print("  9.  Voir la memoire")
-    print("  10. Effacer la memoire")
+    print("  9.  View memory")
+    print("  10. Clear memory")
     print()
-    print("  0.  Quitter")
+    print("  0.  Quit")
     print()
 
 
 def ask_task_and_topics() -> Tuple[str, str]:
     print()
-    task = input("  Decris ta tache:\n  > ").strip()
+    task = input("  Describe your task:\n  > ").strip()
     if not task:
-        print("  [!] La tache ne peut pas etre vide.")
+        print("  [!] Task cannot be empty.")
         return "", ""
-    topics_raw = input("  Topics (separes par des virgules, ou ENTREE pour aucun):\n  > ").strip()
+    topics_raw = input("  Topics (comma-separated, or ENTER for none):\n  > ").strip()
     return task, topics_raw
 
 
@@ -1314,13 +1373,13 @@ def menu_generate(settings: dict):
     task, topics_raw = ask_task_and_topics()
     if not task:
         return
-    model = pick_model_interactive("Modele de generation", settings["model_a"])
+    model = pick_model_interactive("Generation model", settings["model_a"])
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
     if use_web and check_internet():
-        print("\n  Recherche web en cours ...")
-    print(f"  Lancement generation avec {model} ...")
+        print("\n  Web search in progress ...")
+    print(f"  Starting generation with {model} ...")
     if do_stream:
         print(f"\n  --- {model} : streaming ---\n")
 
@@ -1346,25 +1405,25 @@ def menu_generate(settings: dict):
         session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
         out_file = OUTPUT_DIR / f"{session_id}_{model.replace(':', '_')}.md"
         out_file.write_text(result, encoding="utf-8")
-        print(f"\n  Manifeste sauvegarde : {out_file}")
+        print(f"\n  Manifest saved: {out_file}")
     except (ValueError, RuntimeError, TimeoutError) as e:
-        print(f"\n  [ERREUR] {e}")
+        print(f"\n  [ERROR] {e}")
 
 
 def menu_parallel(settings: dict):
     task, topics_raw = ask_task_and_topics()
     if not task:
         return
-    model_a = pick_model_interactive("Modele A", settings["model_a"])
-    model_b = pick_model_interactive("Modele B", settings["model_b"])
+    model_a = pick_model_interactive("Model A", settings["model_a"])
+    model_b = pick_model_interactive("Model B", settings["model_b"])
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
     if use_web and check_internet():
-        print("\n  Recherche web en cours ...")
-    print(f"  Lancement parallele {model_a} + {model_b} ...")
+        print("\n  Web search in progress ...")
+    print(f"  Starting parallel {model_a} + {model_b} ...")
     if do_stream:
-        print("  Split screen actif. Ctrl+C pour interrompre.\n")
+        print("  Split screen active. Ctrl+C to interrupt.\n")
         time.sleep(1)
 
     try:
@@ -1381,27 +1440,27 @@ def menu_parallel(settings: dict):
             use_web=use_web,
             live_display=do_stream,
         )
-        print(f"\n  Manifeste A : {fa}")
-        print(f"  Manifeste B : {fb}")
+        print(f"\n  Manifest A: {fa}")
+        print(f"  Manifest B: {fb}")
     except (ValueError, RuntimeError, TimeoutError) as e:
-        print(f"\n  [ERREUR] {e}")
+        print(f"\n  [ERROR] {e}")
 
 
 def menu_full(settings: dict):
     task, topics_raw = ask_task_and_topics()
     if not task:
         return
-    model_a = pick_model_interactive("Modele A", settings["model_a"])
-    model_b = pick_model_interactive("Modele B", settings["model_b"])
-    synth = pick_model_interactive("Modele de synthese", settings["synthesis_model"])
+    model_a = pick_model_interactive("Model A", settings["model_a"])
+    model_b = pick_model_interactive("Model B", settings["model_b"])
+    synth = pick_model_interactive("Synthesis model", settings["synthesis_model"])
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
     if use_web and check_internet():
-        print("\n  Recherche web en cours ...")
-    print(f"  Pipeline complet : {model_a} + {model_b} -> synthese {synth} ...")
+        print("\n  Web search in progress ...")
+    print(f"  Full pipeline: {model_a} + {model_b} -> synthesis {synth} ...")
     if do_stream:
-        print("  Phase 1 : split screen parallele. Phase 2 : synthese streaming.\n")
+        print("  Phase 1: parallel split screen. Phase 2: synthesis streaming.\n")
         time.sleep(1)
 
     try:
@@ -1418,37 +1477,39 @@ def menu_full(settings: dict):
             techniques=settings["techniques"],
             use_web=use_web,
             live_display=do_stream,
+            stream=do_stream,
         )
-        print(f"\n  Manifeste A  : {fa}")
-        print(f"  Manifeste B  : {fb}")
-        print(f"  Synthese     : {fs}")
+        print(f"\n  Manifest A : {fa}")
+        print(f"  Manifest B : {fb}")
+        print(f"  Synthesis  : {fs}")
     except (ValueError, RuntimeError, TimeoutError) as e:
-        print(f"\n  [ERREUR] {e}")
+        print(f"\n  [ERROR] {e}")
 
 
 def menu_synthesis(settings: dict):
     print()
     existing = sorted(OUTPUT_DIR.glob("*.md"))
     if not existing:
-        print("  Aucun fichier dans outputs/. Lance d'abord une generation.")
+        print("  No files in outputs/. Run a generation first.")
         return
-    print("  Fichiers disponibles dans outputs/ :")
+    print("  Available files in outputs/:")
     for i, f in enumerate(existing, 1):
         print(f"    {i:3d}. {f.name}")
     print()
     try:
-        idx_a = int(input("  Numero du fichier A : ").strip()) - 1
-        idx_b = int(input("  Numero du fichier B : ").strip()) - 1
+        idx_a = int(input("  File A number: ").strip()) - 1
+        idx_b = int(input("  File B number: ").strip()) - 1
         file_a = existing[idx_a]
         file_b = existing[idx_b]
     except (ValueError, IndexError):
-        print("  [!] Selection invalide.")
+        print("  [!] Invalid selection.")
         return
-    task = input("  Tache d'origine (description courte) :\n  > ").strip()
+    task = input("  Original task (short description):\n  > ").strip()
     if not task:
-        task = "(non fournie)"
-    synth_model = pick_model_interactive("Modele de synthese", settings["synthesis_model"])
-    print(f"\n  Synthese de {file_a.name} + {file_b.name} avec {synth_model} ...")
+        task = "(not provided)"
+    synth_model = pick_model_interactive("Synthesis model", settings["synthesis_model"])
+    do_stream = settings.get("stream", True) and sys.stdout.isatty()
+    print(f"\n  Synthesizing {file_a.name} + {file_b.name} with {synth_model} ...")
     try:
         manifest_a = file_a.read_text(encoding="utf-8")
         manifest_b = file_b.read_text(encoding="utf-8")
@@ -1462,79 +1523,102 @@ def menu_synthesis(settings: dict):
             timeout=settings["timeout"],
             synthesis_model=synth_model,
             techniques=settings["techniques"],
+            stream=do_stream,
         )
-        print(f"\n  Synthese sauvegardee : {out_path}")
+        print(f"\n  Synthesis saved: {out_path}")
     except (ValueError, RuntimeError, TimeoutError) as e:
-        print(f"\n  [ERREUR] {e}")
+        print(f"\n  [ERROR] {e}")
 
 
 def menu_configure_models(settings: dict):
     print()
-    print("  -- Configuration des modeles par defaut --")
-    print(f"  Actuels : A={settings['model_a']}  B={settings['model_b']}  Synth={settings['synthesis_model']}")
-    settings["model_a"] = pick_model_interactive("Modele A (generation / simple)", settings["model_a"])
-    settings["model_b"] = pick_model_interactive("Modele B (parallele)", settings["model_b"])
-    settings["synthesis_model"] = pick_model_interactive("Modele de synthese", settings["synthesis_model"])
+    print("  -- Default model configuration --")
+    print(f"  Current: A={settings['model_a']}  B={settings['model_b']}  Synth={settings['synthesis_model']}")
+    settings["model_a"] = pick_model_interactive("Model A (generation / single)", settings["model_a"])
+    settings["model_b"] = pick_model_interactive("Model B (parallel)", settings["model_b"])
+    settings["synthesis_model"] = pick_model_interactive("Synthesis model", settings["synthesis_model"])
     save_settings(settings)
-    print("\n  Modeles sauvegardes.")
+    print("\n  Models saved.")
 
 
 def menu_configure_techniques(settings: dict):
     print()
-    print("  -- Configuration des techniques --")
+    print("  -- Technique configuration --")
     current = ",".join(str(t) for t in settings["techniques"])
-    print(f"  Actives : {current}")
+    print(f"  Active: {current}")
     print()
-    print("  Exemples de saisie :")
-    print("    1,5,8,10,25     ->  techniques specifiques")
-    print("    1-20             ->  plage")
-    print("    1-10,25,40-50    ->  combinaison")
-    print("    all              ->  toutes (1-100)")
-    print("    default          ->  ensemble par defaut")
+    total = len(TECHNIQUES_DB)
+    print("  Input examples:")
+    print("    1,5,8,10,25     ->  specific techniques")
+    print("    1-20             ->  range")
+    print("    1-10,25,40-50    ->  combination")
+    print(f"    all              ->  all ({total} techniques)")
+    print("    default          ->  default set")
     print()
-    raw = input("  Techniques : ").strip()
+    raw = input("  Techniques: ").strip()
     if not raw:
         return
     if raw.lower() == "all":
-        settings["techniques"] = list(range(1, 101))
+        settings["techniques"] = sorted(TECHNIQUES_DB.keys())
     elif raw.lower() == "default":
         settings["techniques"] = list(DEFAULT_TECHNIQUES)
     else:
         settings["techniques"] = parse_techniques(raw)
     save_settings(settings)
-    print(f"\n  {len(settings['techniques'])} techniques actives.")
+    print(f"\n  {len(settings['techniques'])} techniques active.")
 
 
 def menu_list_techniques():
     print()
-    print("  Techniques de Prompt Engineering disponibles :")
-    print("  " + "-" * 58)
-    for tid in sorted(TECHNIQUES_DB.keys()):
-        tech = TECHNIQUES_DB[tid]
-        print(f"  {tid:3d}. {tech['title']}")
-        print(f"       {tech['description']}")
+    print("  Available Prompt Engineering Techniques:")
+    print("  " + "=" * 62)
+    if CATEGORIES_DB:
+        for cat in CATEGORIES_DB:
+            print(f"\n  [{cat['id'].upper()}] {cat['name']}")
+            print(f"  {cat.get('description', '')}")
+            print("  " + "-" * 58)
+            for tech in cat.get("techniques", []):
+                print(f"  {tech['id']:3d}. {tech['title']}")
+                print(f"       {tech['description']}")
+    else:
+        for tid in sorted(TECHNIQUES_DB.keys()):
+            tech = TECHNIQUES_DB[tid]
+            print(f"  {tid:3d}. {tech['title']}")
+            print(f"       {tech['description']}")
+    if ANTI_PATTERNS:
+        print(f"\n  [ANTI-PATTERNS] Common mistakes to avoid")
+        print("  " + "-" * 58)
+        for ap in ANTI_PATTERNS:
+            print(f"  ! {ap['name']}: {ap['symptom']}")
+            print(f"    Fix: {ap['fix']}")
+    if QUICK_REFERENCE:
+        print(f"\n  [QUICK REFERENCE] Recommended techniques by task type")
+        print("  " + "-" * 58)
+        for task_type, ids in QUICK_REFERENCE.items():
+            id_str = ",".join(str(i) for i in ids)
+            print(f"  {task_type}: {id_str}")
     print()
-    input("  Appuie sur ENTREE pour revenir au menu...")
+    input("  Press ENTER to return to menu...")
 
 
 def prompt_bool(label: str, default: bool) -> bool:
-    dstr = "oui" if default else "non"
-    val = input(f"  {label} [{dstr}] (oui/non): ").strip().lower()
+    dstr = "yes" if default else "no"
+    val = input(f"  {label} [{dstr}] (yes/no): ").strip().lower()
     if not val:
         return default
-    return val in ("oui", "o", "yes", "y", "1", "true")
+    return val in ("yes", "y", "oui", "o", "1", "true")
 
 
 def menu_advanced(settings: dict):
     print()
-    print("  -- Parametres avances --")
+    print("  -- Advanced settings --")
     settings["temperature"] = prompt_float("Temperature (0.0 - 1.0)", settings["temperature"])
-    settings["timeout"] = prompt_int("Timeout par appel (secondes)", settings["timeout"])
-    settings["ollama_url"] = prompt_input("URL Ollama", settings["ollama_url"])
-    settings["use_web"] = prompt_bool("Enrichissement web automatique", settings.get("use_web", True))
-    settings["stream"] = prompt_bool("Streaming temps reel dans le terminal", settings.get("stream", True))
+    settings["timeout"] = prompt_int("Timeout per call (seconds)", settings["timeout"])
+    settings["ollama_url"] = prompt_input("Ollama URL", settings["ollama_url"])
+    settings["use_web"] = prompt_bool("Automatic web enrichment", settings.get("use_web", True))
+    settings["stream"] = prompt_bool("Real-time streaming in terminal", settings.get("stream", True))
     save_settings(settings)
-    print("\n  Parametres sauvegardes.")
+    print("\n  Settings saved.")
 
 
 def interactive():
@@ -1546,7 +1630,7 @@ def interactive():
         print_banner(settings)
         print_menu()
 
-        choice = input("  Choix > ").strip()
+        choice = input("  Choice > ").strip()
 
         if choice == "1":
             menu_generate(settings)
@@ -1570,16 +1654,16 @@ def interactive():
             print(view_memory())
         elif choice == "10":
             clear_memory()
-            print("\n  Memoire effacee.")
+            print("\n  Memory cleared.")
         elif choice in ("0", "q", "quit", "exit"):
-            print("\n  A bientot.\n")
+            print("\n  Goodbye.\n")
             break
         else:
-            print("\n  [!] Choix invalide.")
+            print("\n  [!] Invalid choice.")
 
         if choice not in ("0", "q", "quit", "exit"):
             print()
-            input("  Appuie sur ENTREE pour revenir au menu...")
+            input("  Press ENTER to return to menu...")
 
 
 if __name__ == "__main__":

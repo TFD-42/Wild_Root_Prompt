@@ -74,26 +74,26 @@ python3 prompt_expert_enhence.py full "Design a REST API" --techniques "1-30"
 ==============================================================
    Model A     : llama3:latest
    Model B     : qwen2.5:7b
-   Synthese    : qwen2.5:7b
+   Synthesis   : qwen2.5:7b
    Temperature : 0.3
-   Techniques  : 10 actives
+   Techniques  : 15 active / 173 available
    Internet    : ON   Web enrichment : ON   Streaming : ON
 --------------------------------------------------------------
 
-  1.  Generation simple        (1 model, streaming)
-  2.  Generation parallele      (2 models, split screen)
-  3.  Pipeline complet          (parallel + synthesis)
-  4.  Synthese de 2 fichiers
+  1.  Single generation         (1 model, streaming)
+  2.  Parallel generation       (2 models, split screen)
+  3.  Full pipeline             (parallel + synthesis)
+  4.  Synthesize 2 files
 
-  5.  Configurer les modeles
-  6.  Configurer les techniques
-  7.  Voir les techniques disponibles
-  8.  Parametres avances        (temperature, timeout, url, web, stream)
+  5.  Configure models
+  6.  Configure techniques
+  7.  Browse available techniques
+  8.  Advanced settings          (temperature, timeout, url, web, stream)
 
-  9.  Voir la memoire
-  10. Effacer la memoire
+  9.  View memory
+  10. Clear memory
 
-  0.  Quitter
+  0.  Quit
 ```
 
 ### Model Picker
@@ -101,23 +101,25 @@ python3 prompt_expert_enhence.py full "Design a REST API" --techniques "1-30"
 When selecting a model, Pro-Prompt lists all locally installed models:
 
 ```
-  -- Modele de generation --
-  Modeles installes localement :
-      1. llama3:latest                   4.7GB  2026-05-20  <-- actuel
+  -- Generation model --
+  Locally installed models:
+      1. llama3:latest                   4.7GB  2026-05-20  <-- current
       2. qwen2.5:7b                      4.4GB  2026-05-18
       3. dolphin3:latest                 4.6GB  2026-05-07
-      4. [Entrer un nom manuellement / pull un nouveau modele]
+      4. [Enter a name manually / pull a new model]
 
-  Choix [llama3:latest] >
+  Choice [llama3:latest] >
 ```
 
 Type a number to select, a model name to pull, or Enter to keep the current one.
 
 ## Prompt Engineering Techniques
 
-Pro-Prompt ships with 100 techniques in `prompte_expert_methodologie.json`. Each technique forces the LLM into deeper, more structured output.
+Pro-Prompt ships with **173 techniques** across **15 categories** in `prompte_expert_methodologie.json`, plus 8 anti-patterns and a quick-reference matrix for task-based selection.
 
-**Default set (10 techniques):** step-by-step reasoning, forced reframing, anti-lazy preamble, recursive deepening, counter-arguments, example-driven expansion, outline-then-expand, definition-first, first-principles, no-word-limit.
+**Categories:** Framing (zero/few/many-shot), Directed (CoT, ToT, GoT, ReAct, PoT), Depth-forcing, Constraint-based, Multi-perspective, Meta/recursive (self-critique, constitutional), Structural, Persona/role, Emergent (emotional priming, anchoring), Cognitive decomposition (MECE, first principles), Adversarial (red team, stress test), Hybrid multi-pass, Evidence/justification, Creative/narrative, Rarely-explored domains.
+
+**Default set (15 techniques):** step-by-step, reframing, anti-lazy, recursive deepening, counter-arguments, examples, outline-then-expand, definition-first, first-principles, no-word-limit, Tree-of-Thought, constraint stacking, constitutional prompting, MECE decomposition, assumption mapping.
 
 Select techniques per run:
 
@@ -128,14 +130,14 @@ Select techniques per run:
 # Range
 --techniques "1-30"
 
-# All 100
---techniques "1-100"
+# All 173
+--techniques "1-173"
 
-# List available
+# List available (grouped by category)
 python3 prompt_expert_enhence.py generate x --list-techniques
 ```
 
-In the interactive menu, use option `6` to configure or option `7` to browse.
+In the interactive menu, use option `6` to configure or option `7` to browse (now with category grouping).
 
 ## Web Enrichment
 
@@ -193,7 +195,7 @@ All settings persist in `settings.json` (gitignored, local to each user):
 | `synthesis_model` | `qwen2.5:7b` | Model used for synthesis |
 | `temperature` | `0.3` | LLM temperature (0.0--1.0) |
 | `timeout` | `600` | Seconds per Ollama call |
-| `techniques` | `[1,5,8,10,12,14,18,25,40,47]` | Active technique IDs |
+| `techniques` | `[1,5,8,10,12,14,18,25,40,47,108,121,125,147,153]` | Active technique IDs (from 173 available) |
 | `use_web` | `true` | Enable web enrichment |
 | `stream` | `true` | Enable real-time streaming |
 
