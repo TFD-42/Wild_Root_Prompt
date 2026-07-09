@@ -31,7 +31,11 @@ from prompt_expert_enhance import (
 )
 
 app = Flask(__name__, static_folder=None)
-app.config["SECRET_KEY"] = "proprompt-local-only"
+app.config["SECRET_KEY"] = __import__("secrets").token_hex(32)  # random per-run, never stored
+
+# Suppress Werkzeug request logs — no IPs, no paths printed to terminal
+import logging as _logging
+_logging.getLogger("werkzeug").setLevel(_logging.ERROR)
 
 # ── Embedded HTML ────────────────────────────────────────────────────────────
 

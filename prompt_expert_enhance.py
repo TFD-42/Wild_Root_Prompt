@@ -660,7 +660,7 @@ def build_memory_context(max_items: int = 3) -> str:
 
 def clear_memory():
     save_memory({"sessions": []})
-    logger.info("Memory cleared.")
+    logger.debug("Memory cleared.")
 
 
 def view_memory() -> str:
@@ -733,13 +733,28 @@ def web_search_duckduckgo(query: str, max_results: int = 5) -> List[Dict[str, st
         return []
 
 
+_SSRF_BLOCK = re.compile(
+    r"^https?://"
+    r"(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|::1|0\.0\.0\.0)",
+    re.IGNORECASE,
+)
+
+
 def fetch_page_text(url: str, max_chars: int = 3000) -> str:
+    if not url or not url.startswith(("http://", "https://")):
+        return ""
+    if _SSRF_BLOCK.match(url):
+        return ""
     try:
         resp = requests.get(
             url,
             headers={"User-Agent": HTTP_USER_AGENT},
             timeout=10,
+            allow_redirects=True,
         )
+        # Block redirects to internal addresses
+        if _SSRF_BLOCK.match(resp.url):
+            return ""
         resp.raise_for_status()
         text = re.sub(r"<script[^>]*>.*?</script>", "", resp.text, flags=re.DOTALL)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
@@ -753,13 +768,12 @@ def fetch_page_text(url: str, max_chars: int = 3000) -> str:
 def build_web_context(task: str, topic: str = "", max_results: int = 3, max_pages: int = 2) -> str:
     if not check_internet():
         return ""
-    query = task
-    if topic:
-        query = f"{topic} {task}"
-    logger.info(f"Web research: \"{query[:60]}\" ...")
+    # Truncate to 150 chars — enough context for search, never sends full user task
+    query = (f"{topic} {task}" if topic else task).strip()[:150]
+    logger.debug("Web research running...")
     results = web_search_duckduckgo(query, max_results=max_results)
     if not results:
-        logger.info("No web results found.")
+        logger.debug("No web results found.")
         return ""
     lines = ["## WEB CONTEXT (automatic search, for enrichment)"]
     pages_fetched = 0
@@ -772,7 +786,7 @@ def build_web_context(task: str, topic: str = "", max_results: int = 3, max_page
             if page_text:
                 lines.append(f"  Excerpt: {page_text[:800]}")
                 pages_fetched += 1
-    logger.info(f"Web context: {len(results)} results, {pages_fetched} pages fetched.")
+    logger.debug(f"Web context: {len(results)} results, {pages_fetched} pages fetched.")
     return "\n".join(lines)
 
 
@@ -1298,7 +1312,7 @@ def run_synthesis(
 
     ctx_size = max(16384, len(prompt) // 3)
 
-    logger.info("Starting expert synthesis ...")
+    logger.debug("Starting expert synthesis ...")
     if stream_callback is not None:
         synthesis = query_ollama_stream(
             synthesis_model, prompt, temperature,
@@ -1328,7 +1342,7 @@ def run_synthesis(
     header = (f"# Expert Synthesis\n\nTask: {user_input}\n"
               f"Synthesis model: {synthesis_model}\nGenerated: {session_id}\n\n---\n")
     out_file.write_text(header + synthesis, encoding="utf-8")
-    logger.info(f"Synthesis saved to {out_file}")
+    logger.debug(f"Synthesis saved to outputs/{out_file.name}")
 
     append_session({
         "timestamp": datetime.now(timezone.utc).isoformat(),
