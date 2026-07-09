@@ -1523,21 +1523,68 @@ _METHOD_GROUPS = [
     ("Context ",  "/historique /futuriste /questionner /neuf /priorite /niveau:X"),
 ]
 
+_MODEL_NAME_RE = re.compile(r"^[a-zA-Z0-9._:/\-]+$")
+_MAX_TASK_LEN  = 8000
+_MAX_TOPIC_LEN = 500
+_MAX_MODEL_LEN = 100
 
-def collect_input() -> Tuple[str, str]:
+
+def sanitize_input(value: str, kind: str = "text") -> str:
+    """Zero-trust sanitizer for all user-provided strings.
+
+    kind='text'  — task / topic text (strip null bytes, control chars, cap length)
+    kind='model' — model name (allow only safe identifier chars, cap at 100)
+    kind='url'   — ollama URL (must be http/https, host localhost/127.0.0.1 only)
     """
-    Three-step input: prompt → methods → topic.
-    Returns (full_task_with_metacommands, topics_raw).
+    if not isinstance(value, str):
+        return ""
+    # Strip null bytes and ASCII control characters (keep \n \t for text)
+    value = value.replace("\x00", "")
+    if kind != "text":
+        value = re.sub(r"[\x00-\x1f\x7f]", "", value)
+
+    if kind == "model":
+        value = value.strip()[:_MAX_MODEL_LEN]
+        if not _MODEL_NAME_RE.match(value):
+            # Remove any character that doesn't match the allowed set
+            value = re.sub(r"[^a-zA-Z0-9._:/\-]", "", value)
+        return value
+
+    if kind == "url":
+        value = value.strip()
+        try:
+            from urllib.parse import urlparse as _urlparse
+            p = _urlparse(value)
+            if p.scheme not in ("http", "https"):
+                return ""
+            if p.hostname not in ("localhost", "127.0.0.1", "::1"):
+                return ""
+        except Exception:
+            return ""
+        return value
+
+    # kind == "text" (default)
+    # Limit length
+    limit = _MAX_TASK_LEN if len(value) > _MAX_TOPIC_LEN else _MAX_TOPIC_LEN
+    value = value[:limit]
+    return value.strip()
+
+
+def collect_input(settings: dict) -> Tuple[str, str, str]:
+    """
+    Four-step input: prompt → methods → topic → model.
+    Returns (full_task_with_metacommands, topics_raw, model_name).
     Runs without any further prompts after this.
     """
     print()
     print("  ─" * 31)
     print("  STEP 1 — Prompt to enhance")
     print("  ─" * 31)
-    task = input("  > ").strip()
+    raw_task = input("  > ").strip()
+    task = sanitize_input(raw_task, "text")
     if not task:
         print("  [!] Prompt cannot be empty.")
-        return "", ""
+        return "", "", ""
 
     print()
     print("  ─" * 31)
@@ -1545,7 +1592,7 @@ def collect_input() -> Tuple[str, str]:
     for label, cmds in _METHOD_GROUPS:
         print(f"  {label}: {cmds}")
     print("  ─" * 31)
-    methods_raw = input("  > ").strip()
+    methods_raw = sanitize_input(input("  > ").strip(), "text")
 
     # Merge any /commands already in the task with those typed in step 2
     task_cmds = [t for t in task.split() if t.startswith("/")]
@@ -1563,16 +1610,21 @@ def collect_input() -> Tuple[str, str]:
     print("  ─" * 31)
     print("  STEP 3 — Topic focus  (ENTER to skip)")
     print("  ─" * 31)
-    topics_raw = input("  > ").strip()
+    topics_raw = sanitize_input(input("  > ").strip(), "text")[:_MAX_TOPIC_LEN]
 
-    return full_task.strip(), topics_raw
+    print()
+    print("  ─" * 31)
+    print("  STEP 4 — Model")
+    print("  ─" * 31)
+    chosen_model = pick_model_interactive("Select model", settings.get("model_a", DEFAULT_MODEL_A))
+
+    return full_task.strip(), topics_raw, chosen_model
 
 
 def menu_generate(settings: dict):
-    task, topics_raw = collect_input()
+    task, topics_raw, model = collect_input(settings)
     if not task:
         return
-    model = settings["model_a"]
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
@@ -1610,11 +1662,10 @@ def menu_generate(settings: dict):
 
 
 def menu_parallel(settings: dict):
-    task, topics_raw = collect_input()
+    task, topics_raw, model_a = collect_input(settings)
     if not task:
         return
-    model_a = settings["model_a"]
-    model_b = settings["model_b"]
+    model_b = pick_model_interactive("Select model B", settings.get("model_b", DEFAULT_MODEL_B))
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
@@ -1646,12 +1697,11 @@ def menu_parallel(settings: dict):
 
 
 def menu_full(settings: dict):
-    task, topics_raw = collect_input()
+    task, topics_raw, model_a = collect_input(settings)
     if not task:
         return
-    model_a = settings["model_a"]
-    model_b = settings["model_b"]
-    synth = settings["synthesis_model"]
+    model_b = pick_model_interactive("Select model B", settings.get("model_b", DEFAULT_MODEL_B))
+    synth = pick_model_interactive("Select synthesis model", settings.get("synthesis_model", DEFAULT_SYNTH_MODEL))
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
@@ -1703,7 +1753,7 @@ def menu_synthesis(settings: dict):
     except (ValueError, IndexError):
         print("  [!] Invalid selection.")
         return
-    task = input("  Original task (short description):\n  > ").strip()
+    task = sanitize_input(input("  Original task (short description):\n  > ").strip(), "text")
     if not task:
         task = "(not provided)"
     synth_model = pick_model_interactive("Synthesis model", settings["synthesis_model"])
@@ -1813,7 +1863,8 @@ def menu_advanced(settings: dict):
     print("  -- Advanced settings --")
     settings["temperature"] = prompt_float("Temperature (0.0 - 1.0)", settings["temperature"])
     settings["timeout"] = prompt_int("Timeout per call (seconds)", settings["timeout"])
-    settings["ollama_url"] = prompt_input("Ollama URL", settings["ollama_url"])
+    raw_url = prompt_input("Ollama URL", settings["ollama_url"])
+    settings["ollama_url"] = sanitize_input(raw_url, "url") or settings["ollama_url"]
     settings["use_web"] = prompt_bool("Automatic web enrichment", settings.get("use_web", True))
     settings["stream"] = prompt_bool("Real-time streaming in terminal", settings.get("stream", True))
     save_settings(settings)
