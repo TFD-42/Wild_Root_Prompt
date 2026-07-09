@@ -2,7 +2,7 @@
 """
 Pro-Prompt – Expert Prompt Enhancement Tool powered by Ollama.
 
-Version: 2.2.0
+Version: 2.3.0
 
 Two output modes:
     quick  — single enhanced prompt, ready to paste into any LLM

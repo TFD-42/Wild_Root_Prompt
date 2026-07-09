@@ -25,6 +25,7 @@ from prompt_expert_enhance import (
     DEFAULT_MODEL_A, DEFAULT_MODEL_B, DEFAULT_SYNTH_MODEL,
     DEFAULT_TECHNIQUES, OLLAMA_URL,
     generate_multi_topics, generate_parallel_both, run_full_pipeline,
+    run_synthesis,
     pre_process_input, list_local_models, sanitize_input,
     load_settings, save_settings, PRE_PROCESSOR_TIMEOUT,
     is_ollama_running, ensure_ollama_ready,
@@ -697,8 +698,10 @@ def api_generate():
         return jsonify({"error": "Empty task"}), 400
 
     token_queue: queue.Queue = queue.Queue()
+    accumulated: list = []
 
     def stream_cb(token: str):
+        accumulated.append(token)
         token_queue.put(token)
 
     def run():
@@ -716,6 +719,13 @@ def api_generate():
                 stream_callback=stream_cb,
                 mode=mode,
             )
+            # Save to outputs/ like the CLI does
+            from datetime import datetime, timezone
+            import uuid as _uuid
+            from prompt_expert_enhance import OUTPUT_DIR
+            sid = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + _uuid.uuid4().hex[:6]
+            out = OUTPUT_DIR / f"{sid}_{model.replace(':', '_')}_web.md"
+            out.write_text("".join(accumulated), encoding="utf-8")
         except Exception as e:
             token_queue.put(f"\n[ERROR] {e}")
         finally:
@@ -762,7 +772,6 @@ def api_synthesize():
 
     def run():
         try:
-            from prompt_expert_enhance import run_synthesis
             run_synthesis(
                 user_input=task or "synthesis",
                 manifest_a=manifest_a,

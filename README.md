@@ -1,16 +1,16 @@
-# Pro-Prompt — Local LLM Prompt Engineering & Manifest Generator
+# Pro-Prompt — Local LLM Prompt Enhancement Tool v2.3
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Ollama](https://img.shields.io/badge/Ollama-compatible-green.svg)](https://ollama.com)
 [![Techniques](https://img.shields.io/badge/Techniques-173-orange.svg)](#prompt-engineering-techniques)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#install)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows%20%7C%20Android-lightgrey.svg)](#install)
 
-**Generate structured, expert-level instruction manifests from any task description using local LLMs via Ollama — no cloud API keys required.**
+**Transform any raw prompt into expert-level output using local LLMs via Ollama — no cloud API keys, no data sent to external servers.**
 
 <img width="1983" height="793" alt="llm" src="https://github.com/user-attachments/assets/4623620d-df38-41ae-834e-3fa239f22e6f" />
 
-Pro-Prompt is a CLI tool and interactive launcher that transforms task descriptions into comprehensive, reproducible instruction manifests. It applies **173 prompt engineering techniques** across **15 categories** (Chain-of-Thought, Tree-of-Thought, ReAct, MECE decomposition, red teaming, and more) to force exhaustive, high-quality outputs from any Ollama-compatible model. Supports single-model streaming, dual-model parallel generation with split-screen display, and expert synthesis that merges two outputs into a superior unified document.
+Pro-Prompt enhances any prompt before it reaches your LLM. A **pre-processor** first restructures and clarifies your raw input, then applies **173 prompt engineering techniques** across 15 categories (Chain-of-Thought, Tree-of-Thought, ReAct, MECE, red teaming, and more) to generate exhaustive, high-quality outputs. Novice users get a **local web UI** (one click); power users get a full **CLI** with parallel dual-model generation, split-screen streaming, and expert synthesis.
 
 ---
 
@@ -18,22 +18,24 @@ Pro-Prompt is a CLI tool and interactive launcher that transforms task descripti
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive launcher** | Numbered menu, no CLI flags to memorize |
+| **Pre-processor** | Ollama restructures and completes your raw input before the main pipeline (toggleable) |
+| **Local web UI** | One-click browser interface at `http://localhost:7860` — novice-friendly, no CLI needed |
+| **Interactive CLI** | Numbered menu, no flags to memorize |
 | **Two output modes** | **Quick**: single enhanced prompt ready to paste · **Full**: exhaustive 12-section manifest |
 | **173 prompt engineering techniques** | Organized in 15 categories with anti-patterns and quick-reference matrix |
 | **60 /slash metacommands** | Inline modifiers: persona, format, depth, reasoning, quality, context |
-| **Single model generation** | Real-time token streaming in terminal |
+| **Single model generation** | Real-time token streaming in terminal or browser |
 | **Parallel dual-model generation** | Split-screen display with two columns, live tokens |
 | **Expert synthesis** | Merges two outputs into a unified, superior document with streaming |
 | **Full pipeline** | Parallel generation + synthesis in one command |
-| **Web enrichment** | Automatic DuckDuckGo search for real-world context injection |
+| **Web enrichment** | Automatic DuckDuckGo search for real-world context (toggleable, SSRF-protected) |
 | **Model auto-detection** | Lists locally installed Ollama models with numbered picker at each run |
-| **First-run guidance** | If no models are installed, offers guided pull with RAM requirements |
-| **Auto-install** | Installs Ollama and Python automatically on macOS, Linux, and Windows |
-| **Auto-pull** | Downloads missing models on demand via `ollama pull` |
-| **Zero-trust input sanitization** | All user inputs validated before reaching LLM or filesystem |
+| **First-run guidance** | If no models installed, offers guided pull with RAM requirements |
+| **One-click launchers** | `Pro_Prompt.command` (macOS) · `Pro_Prompt.bat` (Windows) · `Pro_Prompt` (Linux) |
+| **Cross-platform install** | `install.sh` (macOS/Linux) · `install.ps1` (Windows) · `install_termux.sh` (Android) |
+| **Zero-trust security** | Input sanitization, SSRF block, no PII in logs, random session key |
 | **Session memory** | Tracks past runs for cross-session coherence |
-| **Persistent settings** | Models, techniques, temperature, output mode saved locally |
+| **Persistent settings** | Models, techniques, temperature, output mode, pre-processor saved locally |
 
 ---
 
@@ -59,9 +61,29 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install.ps1
 ```
 
-The installer handles everything: Ollama, Python 3, virtual environment, and dependencies.
+**Android / Termux:**
 
-### Run
+```bash
+git clone https://github.com/TFD-42/Pro-Prompt.git
+cd Pro-Prompt
+chmod +x install_termux.sh
+./install_termux.sh
+```
+
+The installer handles everything: Ollama, Python 3, virtual environment, and dependencies. It also creates a one-click launcher.
+
+### Launch — Web UI (novice-friendly)
+
+| Platform | Action |
+|----------|--------|
+| **macOS** | Double-click `Pro_Prompt.command` in Finder |
+| **Windows** | Double-click `Pro_Prompt.bat` |
+| **Linux** | Run `./Pro_Prompt` in terminal |
+| **Any** | `python3 prompt_expert_enhance.py --web` |
+
+Opens `http://localhost:7860` in your browser automatically.
+
+### Launch — CLI (power users)
 
 ```bash
 source .venv/bin/activate    # Linux/macOS
@@ -70,7 +92,7 @@ source .venv/bin/activate    # Linux/macOS
 python3 prompt_expert_enhance.py
 ```
 
-Launches the interactive menu. No arguments needed.
+Launches the interactive numbered menu. No arguments needed.
 
 ### CLI Mode
 
@@ -212,16 +234,24 @@ Generated manifests follow a **12-section structure**:
 
 ```
 Pro-Prompt/
-  prompt_expert_enhance.py          # Main application (~2000 lines)
+  prompt_expert_enhance.py        # Main application — CLI + pre-processor (~2200 lines)
+  web_server.py                   # Local web UI server (Flask, SSE streaming)
   prompt_expert_methodology.json  # 173 prompt engineering techniques (15 categories)
-  requirements.txt                  # Python dependencies (requests)
-  install.sh                        # Installer for macOS/Linux
-  install.ps1                       # Installer for Windows
+  requirements.txt                # Python deps: requests, flask
+  install.sh                      # Installer — macOS / Linux
+  install.ps1                     # Installer — Windows
+  install_termux.sh               # Installer — Android / Termux
+  Pro_Prompt.command              # macOS double-click launcher (web UI)
+  Pro_Prompt.bat                  # Windows launcher (created by install.ps1)
+  Pro_Prompt                      # Linux/macOS terminal launcher (created by install.sh)
+  tools/
+    privacy_scan.py               # PII scanner — run before every push
+  build_tools/                    # Implementation specs (reference docs)
   .gitignore
   README.md
   LICENSE
-  memory/                           # Session history (gitignored)
-  outputs/                          # Generated manifests (gitignored)
+  memory/                         # Session history (gitignored)
+  outputs/                        # Generated outputs (gitignored)
 ```
 
 ## Requirements
@@ -243,8 +273,11 @@ All settings persist in `settings.json` (gitignored, local to each user):
 | `temperature` | `0.3` | LLM temperature (0.0–1.0) |
 | `timeout` | `600` | Seconds per Ollama call |
 | `techniques` | `[1,5,8,10,12,14,18,25,40,47,108,121,125,147,153]` | Active technique IDs (from 173 available) |
-| `use_web` | `true` | Enable web enrichment |
+| `use_web` | `true` | Enable web enrichment (DuckDuckGo, SSRF-protected) |
 | `stream` | `true` | Enable real-time streaming |
+| `output_mode` | `"full"` | `"quick"` = enhanced prompt · `"full"` = 12-section manifest |
+| `use_pre_processor` | `true` | Enable pre-processor step (Ollama restructures raw input) |
+| `pre_processor_model` | `""` | Model for pre-processor (`""` = use Model A) |
 
 ## How It Works
 
