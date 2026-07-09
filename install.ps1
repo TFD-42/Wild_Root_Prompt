@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir   = Join-Path $ScriptDir ".venv"
 $ReqFile   = Join-Path $ScriptDir "requirements.txt"
-$MainScript = Join-Path $ScriptDir "prompt_expert_enhence.py"
+$MainScript = Join-Path $ScriptDir "prompt_expert_enhance.py"
 
 function Info($msg)  { Write-Host "[INFO]  $msg" -ForegroundColor Cyan }
 function Ok($msg)    { Write-Host "[OK]    $msg" -ForegroundColor Green }
@@ -225,9 +225,9 @@ Write-Host "  Pour lancer Pro-Prompt :" -ForegroundColor White
 Write-Host ""
 Write-Host "  cd `"$ScriptDir`"" -ForegroundColor Cyan
 Write-Host "  .\.venv\Scripts\Activate.ps1" -ForegroundColor Cyan
-Write-Host "  python prompt_expert_enhence.py" -ForegroundColor Cyan
+Write-Host "  python prompt_expert_enhance.py" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  (ou en une ligne) :" -ForegroundColor White
 Write-Host ""
-Write-Host "  cd `"$ScriptDir`" ; .\.venv\Scripts\Activate.ps1 ; python prompt_expert_enhence.py" -ForegroundColor Cyan
+Write-Host "  cd `"$ScriptDir`" ; .\.venv\Scripts\Activate.ps1 ; python prompt_expert_enhance.py" -ForegroundColor Cyan
 Write-Host ""

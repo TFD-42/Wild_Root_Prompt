@@ -41,6 +41,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -72,7 +73,7 @@ HTTP_USER_AGENT = "Mozilla/5.0 (compatible; ManifestGen/2.1; +https://github.com
 DEFAULT_TIMEOUT = 600  # seconds for a single Ollama call
 SYNTH_TIMEOUT = 1200   # longer timeout for synthesis
 
-# Technique appliquées par défaut (peuvent être réglées via CLI)
+# Default techniques applied when none are specified (configurable via CLI or settings)
 DEFAULT_TECHNIQUES = [1, 5, 8, 10, 12, 14, 18, 25, 40, 47, 108, 121, 125, 147, 153]
 
 # Create directories at import time
@@ -513,10 +514,8 @@ Begin directly with "## PART I - COMPARATIVE ANALYSIS". No preamble.
 """
 
 # ----------------------------------------------------------------------
-# Persistent memory helpers (thread‑safe with simple lock)
+# Persistent memory helpers (thread-safe with lock)
 # ----------------------------------------------------------------------
-import threading
-
 _memory_lock = threading.Lock()
 
 def load_memory() -> dict:
@@ -1484,7 +1483,7 @@ def print_banner(settings: dict):
     web_st = "ON" if settings.get("use_web", True) and check_internet() else "OFF"
     stream_st = "ON" if settings.get("stream", True) else "OFF"
     print("=" * 62)
-    print("   MANIFEST GENERATOR  -  Prompt Expert Launcher")
+    print("   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.2")
     print("=" * 62)
     print(f"   Model A     : {settings['model_a']}")
     print(f"   Model B     : {settings['model_b']}")
@@ -1510,8 +1509,52 @@ def print_menu():
     print("  9.  View memory")
     print("  10. Clear memory")
     print()
+    print("  h.  Help — metacommands & usage")
     print("  0.  Quit")
     print()
+
+
+def print_help():
+    print()
+    print("  " + "=" * 58)
+    print("  PRO-PROMPT — Help")
+    print("  " + "=" * 58)
+    print()
+    print("  HOW IT WORKS")
+    print("  Enter your prompt in STEP 1. The tool enhances it using")
+    print("  173 prompt-engineering techniques and sends the result to")
+    print("  a local Ollama model. Output is saved to outputs/")
+    print()
+    print("  /SLASH METACOMMANDS  (type them in STEP 1 or STEP 2)")
+    print("  ─" * 29)
+    print("  Persona  : /expert /humain /enfant /philosophe /sceptique")
+    print("             /mentor /cynique /serieux /humour /emphatique")
+    print("  Format   : /tableau /json /markdown /points /checklist /code")
+    print("  Depth    : /resume /concis /detaille /urgent /silence")
+    print("             /minimal /limite:N  (e.g. /limite:200)")
+    print("  Reasoning: /raisonnement /etapes /exemple /analogie")
+    print("             /pourcontre /debat /reverse /iterer /ameliorer")
+    print("             /critique /audit /comparatif")
+    print("  Quality  : /precision /hypotheses /sources /risques")
+    print("             /decision /verification /confiance /questions")
+    print("             /sansbuzz")
+    print("  Context  : /historique /futuriste /questionner /neuf")
+    print("             /priorite /niveau:X  (debutant|intermediaire|expert)")
+    print()
+    print("  EXAMPLES")
+    print("  > /expert /raisonnement Build a REST API in Python")
+    print("  > /enfant /analogie Explain quantum computing")
+    print("  > /json /critique Analyze this architecture: [description]")
+    print()
+    print("  TIPS FOR NOOBS")
+    print("  - STEP 2 and STEP 3 are optional — just press ENTER to skip")
+    print("  - STEP 4 shows your local models — pick by number")
+    print("  - Option 6 lets you change which techniques are applied")
+    print("  - Outputs are saved in outputs/ as .md files")
+    print()
+    print("  " + "=" * 58)
+    print()
+    input("  Press ENTER to return to menu...")
 
 
 _METHOD_GROUPS = [
@@ -1563,10 +1606,8 @@ def sanitize_input(value: str, kind: str = "text") -> str:
             return ""
         return value
 
-    # kind == "text" (default)
-    # Limit length
-    limit = _MAX_TASK_LEN if len(value) > _MAX_TOPIC_LEN else _MAX_TOPIC_LEN
-    value = value[:limit]
+    # kind == "text" (default) — always allow up to task max; callers slice further if needed
+    value = value[:_MAX_TASK_LEN]
     return value.strip()
 
 
@@ -1656,7 +1697,7 @@ def menu_generate(settings: dict):
         session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
         out_file = OUTPUT_DIR / f"{session_id}_{model.replace(':', '_')}.md"
         out_file.write_text(result, encoding="utf-8")
-        print(f"\n  Saved: {out_file}")
+        print(f"\n  Saved: outputs/{out_file.name}")
     except (ValueError, RuntimeError, TimeoutError) as e:
         print(f"\n  [ERROR] {e}")
 
@@ -1872,46 +1913,59 @@ def menu_advanced(settings: dict):
 
 
 def interactive():
+    # Suppress INFO-level log noise in the interactive terminal UI
+    logging.disable(logging.INFO)
+
     settings = load_settings()
     ensure_ollama_ready()
+
+    _NO_PAUSE = {"0", "q", "quit", "exit", "7", "h", "help", "?"}
 
     while True:
         clear_screen()
         print_banner(settings)
         print_menu()
 
-        choice = input("  Choice > ").strip()
-
-        if choice == "1":
-            menu_generate(settings)
-        elif choice == "2":
-            menu_parallel(settings)
-        elif choice == "3":
-            menu_full(settings)
-        elif choice == "4":
-            menu_synthesis(settings)
-        elif choice == "5":
-            menu_configure_models(settings)
-        elif choice == "6":
-            menu_configure_techniques(settings)
-        elif choice == "7":
-            menu_list_techniques()
-            continue
-        elif choice == "8":
-            menu_advanced(settings)
-        elif choice == "9":
-            print()
-            print(view_memory())
-        elif choice == "10":
-            clear_memory()
-            print("\n  Memory cleared.")
-        elif choice in ("0", "q", "quit", "exit"):
-            print("\n  Goodbye.\n")
+        try:
+            choice = input("  Choice > ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n  Goodbye.\n")
             break
-        else:
-            print("\n  [!] Invalid choice.")
 
-        if choice not in ("0", "q", "quit", "exit"):
+        try:
+            if choice == "1":
+                menu_generate(settings)
+            elif choice == "2":
+                menu_parallel(settings)
+            elif choice == "3":
+                menu_full(settings)
+            elif choice == "4":
+                menu_synthesis(settings)
+            elif choice == "5":
+                menu_configure_models(settings)
+            elif choice == "6":
+                menu_configure_techniques(settings)
+            elif choice == "7":
+                menu_list_techniques()
+            elif choice == "8":
+                menu_advanced(settings)
+            elif choice == "9":
+                print()
+                print(view_memory())
+            elif choice == "10":
+                clear_memory()
+                print("\n  Memory cleared.")
+            elif choice in ("h", "help", "?"):
+                print_help()
+            elif choice in ("0", "q", "quit", "exit"):
+                print("\n  Goodbye.\n")
+                break
+            else:
+                print("\n  [!] Unknown option. Type h for help.")
+        except KeyboardInterrupt:
+            print("\n\n  [Interrupted] Returning to menu...")
+
+        if choice not in _NO_PAUSE:
             print()
             input("  Press ENTER to return to menu...")
 
