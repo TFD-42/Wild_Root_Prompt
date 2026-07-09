@@ -1938,7 +1938,7 @@ def menu_synthesis(settings: dict):
             techniques=settings["techniques"],
             stream=do_stream,
         )
-        print(f"\n  Synthesis saved: {out_path}")
+        print(f"\n  Synthesis saved: outputs/{Path(out_path).name}")
     except (ValueError, RuntimeError, TimeoutError) as e:
         print(f"\n  [ERROR] {e}")
 
@@ -1981,35 +1981,50 @@ def menu_configure_techniques(settings: dict):
     print(f"\n  {len(settings['techniques'])} techniques active.")
 
 
+def _paged_print(lines: List[str], page_size: int = 22):
+    """Print lines with ENTER-to-continue paging."""
+    for i, line in enumerate(lines):
+        print(line)
+        if (i + 1) % page_size == 0 and i < len(lines) - 1:
+            try:
+                cont = input("  -- more -- (ENTER to continue, q to stop) ").strip().lower()
+                if cont == "q":
+                    return
+            except (KeyboardInterrupt, EOFError):
+                return
+
+
 def menu_list_techniques():
-    print()
-    print("  Available Prompt Engineering Techniques:")
-    print("  " + "=" * 62)
+    lines = []
+    lines.append("")
+    lines.append("  Available Prompt Engineering Techniques:")
+    lines.append("  " + "=" * 62)
     if CATEGORIES_DB:
         for cat in CATEGORIES_DB:
-            print(f"\n  [{cat['id'].upper()}] {cat['name']}")
-            print(f"  {cat.get('description', '')}")
-            print("  " + "-" * 58)
+            lines.append(f"\n  [{cat['id'].upper()}] {cat['name']}")
+            lines.append(f"  {cat.get('description', '')}")
+            lines.append("  " + "-" * 58)
             for tech in cat.get("techniques", []):
-                print(f"  {tech['id']:3d}. {tech['title']}")
-                print(f"       {tech['description']}")
+                lines.append(f"  {tech['id']:3d}. {tech['title']}")
+                lines.append(f"       {tech['description']}")
     else:
         for tid in sorted(TECHNIQUES_DB.keys()):
             tech = TECHNIQUES_DB[tid]
-            print(f"  {tid:3d}. {tech['title']}")
-            print(f"       {tech['description']}")
+            lines.append(f"  {tid:3d}. {tech['title']}")
+            lines.append(f"       {tech['description']}")
     if ANTI_PATTERNS:
-        print(f"\n  [ANTI-PATTERNS] Common mistakes to avoid")
-        print("  " + "-" * 58)
+        lines.append(f"\n  [ANTI-PATTERNS] Common mistakes to avoid")
+        lines.append("  " + "-" * 58)
         for ap in ANTI_PATTERNS:
-            print(f"  ! {ap['name']}: {ap['symptom']}")
-            print(f"    Fix: {ap['fix']}")
+            lines.append(f"  ! {ap['name']}: {ap['symptom']}")
+            lines.append(f"    Fix: {ap['fix']}")
     if QUICK_REFERENCE:
-        print(f"\n  [QUICK REFERENCE] Recommended techniques by task type")
-        print("  " + "-" * 58)
+        lines.append(f"\n  [QUICK REFERENCE] Recommended techniques by task type")
+        lines.append("  " + "-" * 58)
         for task_type, ids in QUICK_REFERENCE.items():
             id_str = ",".join(str(i) for i in ids)
-            print(f"  {task_type}: {id_str}")
+            lines.append(f"  {task_type}: {id_str}")
+    _paged_print(lines)
     print()
     input("  Press ENTER to return to menu...")
 

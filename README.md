@@ -19,17 +19,21 @@ Pro-Prompt is a CLI tool and interactive launcher that transforms task descripti
 | Feature | Description |
 |---------|-------------|
 | **Interactive launcher** | Numbered menu, no CLI flags to memorize |
+| **Two output modes** | **Quick**: single enhanced prompt ready to paste · **Full**: exhaustive 12-section manifest |
 | **173 prompt engineering techniques** | Organized in 15 categories with anti-patterns and quick-reference matrix |
+| **60 /slash metacommands** | Inline modifiers: persona, format, depth, reasoning, quality, context |
 | **Single model generation** | Real-time token streaming in terminal |
 | **Parallel dual-model generation** | Split-screen display with two columns, live tokens |
-| **Expert synthesis** | Merges two manifests into a unified, superior document with streaming |
+| **Expert synthesis** | Merges two outputs into a unified, superior document with streaming |
 | **Full pipeline** | Parallel generation + synthesis in one command |
 | **Web enrichment** | Automatic DuckDuckGo search for real-world context injection |
-| **Model auto-detection** | Lists locally installed Ollama models with numbered picker |
+| **Model auto-detection** | Lists locally installed Ollama models with numbered picker at each run |
+| **First-run guidance** | If no models are installed, offers guided pull with RAM requirements |
 | **Auto-install** | Installs Ollama and Python automatically on macOS, Linux, and Windows |
 | **Auto-pull** | Downloads missing models on demand via `ollama pull` |
+| **Zero-trust input sanitization** | All user inputs validated before reaching LLM or filesystem |
 | **Session memory** | Tracks past runs for cross-session coherence |
-| **Persistent settings** | Models, techniques, temperature saved locally |
+| **Persistent settings** | Models, techniques, temperature, output mode saved locally |
 
 ---
 
@@ -63,7 +67,7 @@ The installer handles everything: Ollama, Python 3, virtual environment, and dep
 source .venv/bin/activate    # Linux/macOS
 # .\.venv\Scripts\Activate.ps1  # Windows
 
-python3 prompt_expert_enhence.py
+python3 prompt_expert_enhance.py
 ```
 
 Launches the interactive menu. No arguments needed.
@@ -74,16 +78,16 @@ Pass arguments directly for scripting and automation:
 
 ```bash
 # Single model generation
-python3 prompt_expert_enhence.py generate "Design a REST API" --model llama3:latest
+python3 prompt_expert_enhance.py generate "Design a REST API" --model llama3:latest
 
 # Parallel dual-model generation
-python3 prompt_expert_enhence.py parallel "Design a REST API" --model-a llama3 --model-b qwen2.5:7b
+python3 prompt_expert_enhance.py parallel "Design a REST API" --model-a llama3 --model-b qwen2.5:7b
 
 # Full pipeline (parallel + synthesis)
-python3 prompt_expert_enhence.py full "Design a REST API" --techniques "1-30"
+python3 prompt_expert_enhance.py full "Design a REST API" --techniques "1-30"
 
 # List all 173 techniques grouped by category
-python3 prompt_expert_enhence.py generate x --list-techniques
+python3 prompt_expert_enhance.py generate x --list-techniques
 ```
 
 ---
@@ -92,7 +96,7 @@ python3 prompt_expert_enhence.py generate x --list-techniques
 
 ```
 ==============================================================
-   MANIFEST GENERATOR  -  Prompt Expert Launcher
+   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.2
 ==============================================================
    Model A     : llama3:latest
    Model B     : qwen2.5:7b
@@ -139,7 +143,7 @@ Type a number to select, a model name to pull, or Enter to keep the current one.
 
 ## Prompt Engineering Techniques
 
-Pro-Prompt ships with **173 techniques** across **15 categories** in `prompte_expert_methodologie.json`, plus **8 anti-patterns** and a **quick-reference matrix** for task-based technique selection.
+Pro-Prompt ships with **173 techniques** across **15 categories** in `prompt_expert_methodology.json`, plus **8 anti-patterns** and a **quick-reference matrix** for task-based technique selection.
 
 ### Categories
 
@@ -208,8 +212,8 @@ Generated manifests follow a **12-section structure**:
 
 ```
 Pro-Prompt/
-  prompt_expert_enhence.py          # Main application (~1700 lines)
-  prompte_expert_methodologie.json  # 173 prompt engineering techniques (15 categories)
+  prompt_expert_enhance.py          # Main application (~2000 lines)
+  prompt_expert_methodology.json  # 173 prompt engineering techniques (15 categories)
   requirements.txt                  # Python dependencies (requests)
   install.sh                        # Installer for macOS/Linux
   install.ps1                       # Installer for Windows
@@ -267,7 +271,7 @@ All settings persist in `settings.json` (gitignored, local to each user):
 
 1. Fork the repository
 2. Create a feature branch
-3. Run `python3 -m py_compile prompt_expert_enhence.py` before committing
+3. Run `python3 -m py_compile prompt_expert_enhance.py` before committing
 4. Open a pull request
 
 Keep `settings.json`, `outputs/`, and `memory/sessions.json` out of commits (they are gitignored).
