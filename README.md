@@ -116,7 +116,9 @@ The installer handles everything: Ollama, Python 3, virtual environment, and dep
 | **Linux** | Run `./Pro_Prompt` in terminal |
 | **Any** | `python3 prompt_expert_enhance.py --web` |
 
-Opens `http://localhost:7860` in your browser automatically.
+Opens `http://localhost:7860` in your browser automatically. On macOS, if
+Chrome, Firefox, Brave, Edge, Arc, or Opera is installed, Pro-Prompt opens
+that instead of Safari — see **Troubleshooting** below for why.
 
 ### Launch — CLI (power users)
 
@@ -332,6 +334,13 @@ Pro-Prompt/
   memory/                         # Session history (gitignored)
   outputs/                        # Generated outputs (gitignored)
 ```
+
+## Troubleshooting
+
+**Safari shows "Safari ne parvient pas à ouvrir la page" / a WebKitErrorDomain:305 error, or the window opens blank.**
+This happens when Safari's **HTTPS-Only Mode** is set to apply to *all* websites (Safari → Settings → Advanced). In that mode Safari hard-blocks any plain `http://` navigation — including `localhost` and `127.0.0.1` — with no in-page bypass, since Pro-Prompt's local server intentionally has no TLS certificate (it never leaves your machine). Pro-Prompt already prefers Chrome/Firefox/Brave/Edge/Arc/Opera over Safari on macOS when one is installed, since none of them impose this restriction on loopback addresses. If Safari is your only browser, either:
+- Safari → Settings → Advanced → turn off "Use HTTPS-Only for all websites", or
+- Install any other browser — Pro-Prompt will use it automatically next launch.
 
 ## Requirements
 

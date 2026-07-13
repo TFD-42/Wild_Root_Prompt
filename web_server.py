@@ -1085,6 +1085,40 @@ def run_web_server(port: int = 7860, open_browser: bool = True):
     print()
 
     if open_browser:
+        def _launch_browser(url: str):
+            # Safari's "HTTPS-Only Mode", when set to apply to all sites
+            # (not just per-site after an HTTPS visit), hard-blocks plain
+            # http:// navigation to ANY host — including localhost and
+            # 127.0.0.1 — with no in-page bypass link. Since Pro-Prompt only
+            # serves plain HTTP locally, prefer a non-Safari browser on
+            # macOS when one is installed, since none of them impose this
+            # restriction on loopback addresses.
+            if sys.platform == "darwin":
+                import subprocess
+                for app_name in ("Google Chrome", "Firefox", "Brave Browser", "Microsoft Edge", "Arc", "Opera"):
+                    if Path(f"/Applications/{app_name}.app").exists():
+                        try:
+                            subprocess.run(["open", "-a", app_name, url], check=True, timeout=5)
+                            return
+                        except Exception:
+                            continue
+                # No alternate browser found — falling through to the
+                # system default may be Safari, so warn proactively via a
+                # native notification (a double-clicked .app has no visible
+                # console for print() to reach the user).
+                try:
+                    subprocess.run(
+                        ["osascript", "-e",
+                         'display notification '
+                         '"If the page fails to load: Safari Settings > Advanced > turn off '
+                         '\\"Use HTTPS-Only for all websites\\", then reopen Pro-Prompt." '
+                         'with title "Pro-Prompt" subtitle "Opening ' + url + '"'],
+                        timeout=3,
+                    )
+                except Exception:
+                    pass
+            webbrowser.open(url)
+
         def _open():
             import time as _time
             import socket
@@ -1095,13 +1129,13 @@ def run_web_server(port: int = 7860, open_browser: bool = True):
                 try:
                     sock = socket.create_connection(("127.0.0.1", port), timeout=2)
                     sock.close()
-                    webbrowser.open(url)
+                    _launch_browser(url)
                     return
                 except (socket.timeout, socket.error):
                     if attempt < max_retries - 1:
                         _time.sleep(delay)
             # Fallback: open anyway after timeout (server may still start)
-            webbrowser.open(url)
+            _launch_browser(url)
         threading.Thread(target=_open, daemon=True).start()
 
     try:
