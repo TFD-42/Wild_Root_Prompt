@@ -37,10 +37,12 @@ For detailed help on a command: manifest <command> --help
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import platform
+import random
 import re
 import shutil
 import subprocess
@@ -52,7 +54,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import requests
 
@@ -61,10 +63,48 @@ import requests
 # ----------------------------------------------------------------------
 OLLAMA_URL = "http://localhost:11434/api/generate"
 BASE_DIR = Path(__file__).resolve().parent
-MEMORY_DIR = BASE_DIR / "memory"
-OUTPUT_DIR = BASE_DIR / "outputs"
+
+
+def _is_frozen() -> bool:
+    """True when running inside a PyInstaller-compiled app, not from source."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def _bundled_resource_dir() -> Path:
+    """Read-only data (methodology/templates JSON) bundled inside a compiled
+    app, or the repo root when running from source — unchanged either way
+    for normal dev/CLI use."""
+    if _is_frozen():
+        return Path(getattr(sys, "_MEIPASS", BASE_DIR))
+    return BASE_DIR
+
+
+def _user_data_dir() -> Path:
+    """Writable directory for memory/outputs/cache/settings. A compiled
+    app's own bundle is read-only (and on macOS, code-signed), so writes
+    there would fail or invalidate the signature — redirect to a proper
+    per-OS user data directory instead. Running from source keeps writing
+    next to the script, exactly as before."""
+    if not _is_frozen():
+        return BASE_DIR
+    if sys.platform == "darwin":
+        data_dir = Path.home() / "Library" / "Application Support" / "Pro-Prompt"
+    elif sys.platform == "win32":
+        data_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "Pro-Prompt"
+    else:
+        data_dir = Path.home() / ".pro-prompt"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+_RESOURCE_DIR = _bundled_resource_dir()
+_DATA_DIR = _user_data_dir()
+
+MEMORY_DIR = _DATA_DIR / "memory"
+OUTPUT_DIR = _DATA_DIR / "outputs"
+CACHE_DIR = _DATA_DIR / "cache"
 MEMORY_FILE = MEMORY_DIR / "sessions.json"
-METHODOLOGY_FILE = BASE_DIR / "prompt_expert_methodology.json"
+METHODOLOGY_FILE = _RESOURCE_DIR / "prompt_expert_methodology.json"
 DEFAULT_MODEL_A = "llama3:latest"
 DEFAULT_MODEL_B = "qwen2.5:7b"
 DEFAULT_SYNTH_MODEL = "qwen2.5:7b"
@@ -82,8 +122,9 @@ DEFAULT_TECHNIQUES = [1, 5, 8, 10, 12, 14, 18, 25, 40, 47, 108, 121, 125, 147, 1
 
 # Pre-processor constants
 PRE_PROCESSOR_TIMEOUT = 30
-PRE_PROCESSOR_MAX_TOKENS = 600
-PRE_PROCESSOR_PROMPT = """You are a prompt reconstruction specialist. Your ONLY job is to take a raw, imperfect user input and return a single clean, complete, well-structured prompt.
+PRE_PROCESSOR_MAX_TOKENS = 600          # floor/default, used for short inputs
+PRE_PROCESSOR_MAX_TOKENS_CEILING = 2400  # cap so very long inputs can't cause runaway generation time
+PRE_PROCESSOR_PROMPT = """You are a prompt reconstruction specialist. Your job is to take a raw, imperfect user input and return a single clean, complete, well-structured prompt that is STRICTLY STRONGER than the raw input — never a mere cleanup pass.
 
 ⚠️ LANGUAGE LOCK — THIS IS NON-NEGOTIABLE:
 The input language has been detected as: {DETECTED_LANG}
@@ -98,14 +139,26 @@ ABSOLUTE RULES:
 - LANGUAGE: output MUST be in {DETECTED_LANG}. Never translate. Never switch.
 - Preserve role/persona directives ("Tu es...", "Act as...") exactly.
 
+MANDATORY QUALITY BAR — THE OUTPUT MUST BE STRONGER THAN THE INPUT:
+- The reconstructed prompt must never be a trivial rewording, a passthrough, or equal-or-weaker in specificity, clarity, or actionability than the raw input. If you cannot make it stronger, you have not tried hard enough — revise before outputting.
+- Every one of the "WHAT TO FIX" gaps below that applies must actually be filled in, not just flagged. Silence about a gap is not acceptable if the gap is fixable from context.
+- Add explicit success criteria, scope boundaries, or a deliverable format whenever the raw input leaves them implicit — even for long/detailed inputs.
+- Before finalizing, silently verify: "Is this reconstruction measurably more specific and actionable than what the user typed?" If the answer is no, strengthen it further.
+
+HARD, CHECKABLE REQUIREMENTS (do not skip these — they are verified mechanically):
+- MINIMUM GROWTH: the reconstructed prompt's word count must be at least 3x the raw input's word count, with a floor of 80 words. A reconstruction close in length to the raw input is a FAILED reconstruction.
+- MINIMUM STEP LIST: if the raw input asks for a task, deliverable, script, pipeline, system, or anything to be built/created/implemented/designed/written, the reconstructed prompt MUST include an explicit numbered list of at least 3 concrete steps or requirements the executing agent must follow (e.g. inputs/data handling, each core method or component to implement, expected output/validation). Do not merely mention the topic — decompose it.
+- Each listed step must be concrete and specific to the actual domain/methods named in the raw input (not generic placeholders like "step 1: understand the task").
+
 WHAT TO FIX:
 - Typos, missing words, grammatical fragments → correct silently
 - Vague references ("ce truc", "ça", "it") → make explicit from context
 - Missing output format → infer and state it clearly
 - Missing audience/scope → infer and state it
+- Missing success criteria or constraints → add explicit ones inferred from context
 - If input < 20 words: expand to a complete actionable prompt
-- If input 20-100 words: clean, structure, preserve length
-- If input > 100 words: restructure without expanding
+- If input 20-100 words: clean, structure, and sharpen — add any missing specificity even if it grows the prompt
+- If input > 100 words: restructure and tighten every ambiguous or underspecified clause; do not pad, but do not leave gaps unfixed for the sake of preserving length
 
 WHAT TO PRESERVE ALWAYS:
 - Tone (formal, casual, authoritative, creative)
@@ -113,17 +166,19 @@ WHAT TO PRESERVE ALWAYS:
 - Any explicit constraints the user stated
 - /slash metacommands at the start
 - Language: {DETECTED_LANG}
-
+- Code blocks, code fences (```...```), and concrete examples the user provided — reproduce them verbatim, character-for-character, inside the same fence markers. Never paraphrase, summarize, "clean up", or truncate code/example content. You may add surrounding structure (e.g. "Example:" / "Reference code:" labels) but the fenced content itself is untouchable.
+{KEYWORDS_BLOCK}{USER_LEVEL_BLOCK}
 Raw user input:
 <<<INPUT
 {RAW_INPUT}
 INPUT>>>
 
-Reconstructed prompt (in {DETECTED_LANG}):"""
+Reconstructed prompt (in {DETECTED_LANG}), strictly stronger than the raw input above:"""
 
 # Create directories at import time
 MEMORY_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+CACHE_DIR.mkdir(exist_ok=True)
 
 # Load methodologies from JSON
 TECHNIQUES_DB: Dict[int, Dict[str, str]] = {}
@@ -161,6 +216,21 @@ def load_methodologies():
 
 load_methodologies()
 
+PROMPT_TEMPLATES_FILE = _RESOURCE_DIR / "prompt_templates.json"
+PROMPT_TEMPLATES: Dict[str, Dict] = {}  # id -> {title, category, task, suggested_bundle}
+
+
+def load_prompt_templates() -> None:
+    global PROMPT_TEMPLATES
+    if not PROMPT_TEMPLATES_FILE.exists():
+        return
+    try:
+        data = json.loads(PROMPT_TEMPLATES_FILE.read_text(encoding="utf-8"))
+        PROMPT_TEMPLATES = {t["id"]: t for t in data.get("templates", []) if t.get("id")}
+    except Exception as e:
+        logger.warning(f"Could not load prompt templates: {e}")
+
+
 # Logging setup
 logging.basicConfig(
     level=logging.INFO,
@@ -169,11 +239,72 @@ logging.basicConfig(
 )
 logger = logging.getLogger("manifest_gen")
 
+load_prompt_templates()
+
 
 # ----------------------------------------------------------------------
 # Ollama bootstrap — detect, install, list models, pull
 # ----------------------------------------------------------------------
 OLLAMA_API_BASE = OLLAMA_URL.rsplit("/api/", 1)[0]  # http://localhost:11434
+
+# ----------------------------------------------------------------------
+# Backend abstraction — Ollama (native) or any OpenAI-compatible server
+# (LM Studio, GPT4All's server mode, text-generation-webui's OpenAI
+# extension all speak the same /v1/completions or /v1/chat/completions
+# wire format, so one adapter covers all three).
+# ----------------------------------------------------------------------
+_BACKEND_TYPE = "ollama"  # "ollama" | "openai_compatible"
+_BACKEND_API_BASE = OLLAMA_API_BASE
+
+
+def set_backend_type(backend_type: str) -> None:
+    global _BACKEND_TYPE
+    _BACKEND_TYPE = backend_type if backend_type in ("ollama", "openai_compatible") else "ollama"
+
+
+def _derive_api_base(url: str) -> str:
+    """Strip the endpoint-specific suffix from a full API URL to get the
+    server's base — e.g. 'http://host:port/api/generate' -> 'http://host:port',
+    'http://host:port/v1/chat/completions' -> 'http://host:port'."""
+    for suffix in ("/api/generate", "/v1/chat/completions", "/v1/completions"):
+        if url.endswith(suffix):
+            return url[: -len(suffix)]
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}" if p.scheme and p.netloc else url
+
+
+def set_backend_api_base(url: str) -> None:
+    global _BACKEND_API_BASE
+    _BACKEND_API_BASE = _derive_api_base(url) if url else OLLAMA_API_BASE
+
+
+def _is_chat_endpoint(url: str) -> bool:
+    return "/chat/completions" in url
+
+
+def _openai_compatible_payload(model: str, prompt: str, temperature: float, num_predict: int, url: str, stream: bool) -> dict:
+    max_tokens = num_predict if num_predict and num_predict > 0 else 1024
+    if _is_chat_endpoint(url):
+        return {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": stream,
+        }
+    return {
+        "model": model,
+        "prompt": prompt,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": stream,
+    }
+
+
+def _openai_compatible_extract_text(choice: dict, is_chat: bool) -> str:
+    if is_chat:
+        return choice.get("message", {}).get("content", "") or choice.get("delta", {}).get("content", "")
+    return choice.get("text", "")
 
 
 def detect_os() -> str:
@@ -306,8 +437,20 @@ def start_ollama_serve():
 
 
 def list_local_models() -> List[Dict[str, str]]:
+    base = _BACKEND_API_BASE or OLLAMA_API_BASE
+    if _BACKEND_TYPE == "openai_compatible":
+        try:
+            resp = requests.get(f"{base}/v1/models", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            return [
+                {"name": m.get("id", ""), "size": "?", "modified": ""}
+                for m in data.get("data", []) if m.get("id")
+            ]
+        except Exception:
+            return []
     try:
-        resp = requests.get(f"{OLLAMA_API_BASE}/api/tags", timeout=5)
+        resp = requests.get(f"{base}/api/tags", timeout=5)
         resp.raise_for_status()
         data = resp.json()
         models = []
@@ -453,6 +596,28 @@ def ensure_models_available(settings: dict):
 # ----------------------------------------------------------------------
 # Meta‑prompts (unchanged from original, kept for brevity)
 # ----------------------------------------------------------------------
+FULL_MANIFEST_STRUCTURE = """You produce exactly the following 12 sections, in this order:
+
+### § 1. TITLE & EXECUTIVE SUMMARY
+### § 2. FINAL OBJECTIVE & SUCCESS DEFINITION
+### § 3. EXECUTION CONTEXT & PREREQUISITES
+### § 4. AMBIGUITY ZONES TO RESOLVE
+### § 5. STEP DECOMPOSITION (DETAILED PIPELINE)
+### § 6. CONTROL LOOPS & SCORING
+### § 7. PERSISTENT ARTIFACTS TO MAINTAIN
+### § 8. CONSTRAINTS & GUARDRAILS
+### § 9. ERROR HANDLING STRATEGY
+### § 10. FINAL DELIVERABLE & OUTPUT FORMAT
+### § 11. REPRODUCIBILITY CHECKLIST
+### § 12. NOTES FOR THE TARGET AGENT"""
+
+DRAFT_MANIFEST_STRUCTURE = """DRAFT MODE — you produce EXACTLY the following 2 sections ONLY. Do not write sections 3-12; do not summarize them; do not mention they exist.
+
+### § 1. TITLE & EXECUTIVE SUMMARY
+### § 2. FINAL OBJECTIVE & SUCCESS DEFINITION
+
+DRAFT MODE OVERRIDE: ignore the "no length limit, write as much as necessary" rule above for this run. Keep each of the 2 sections to a short paragraph (2-5 sentences) — this is a fast preview, not the exhaustive manifest."""
+
 META_PROMPT = """
 # META-PROMPT: REPRODUCIBLE INSTRUCTION MANIFEST GENERATOR
 
@@ -496,20 +661,7 @@ USER_INPUT>>>
 
 ## MANDATORY STRUCTURE OF THE GENERATED MANIFEST
 
-You produce exactly the following 12 sections, in this order:
-
-### § 1. TITLE & EXECUTIVE SUMMARY
-### § 2. FINAL OBJECTIVE & SUCCESS DEFINITION
-### § 3. EXECUTION CONTEXT & PREREQUISITES
-### § 4. AMBIGUITY ZONES TO RESOLVE
-### § 5. STEP DECOMPOSITION (DETAILED PIPELINE)
-### § 6. CONTROL LOOPS & SCORING
-### § 7. PERSISTENT ARTIFACTS TO MAINTAIN
-### § 8. CONSTRAINTS & GUARDRAILS
-### § 9. ERROR HANDLING STRATEGY
-### § 10. FINAL DELIVERABLE & OUTPUT FORMAT
-### § 11. REPRODUCIBILITY CHECKLIST
-### § 12. NOTES FOR THE TARGET AGENT
+{SECTION_STRUCTURE}
 
 ---
 
@@ -627,20 +779,79 @@ Start the enhanced prompt now:
 # ----------------------------------------------------------------------
 _memory_lock = threading.Lock()
 
+try:
+    from cryptography.fernet import Fernet
+    _FERNET_AVAILABLE = True
+except ImportError:
+    _FERNET_AVAILABLE = False
+
+MEMORY_KEY_FILE = MEMORY_DIR / ".memory.key"
+_MEMORY_ENC_MARKER = b"PPENC1:"
+_MEMORY_ENCRYPTION_ENABLED = False
+
+
+def set_memory_encryption_enabled(enabled: bool) -> None:
+    """Enable/disable at-rest encryption for memory/sessions.json. Silently
+    stays in plaintext (with a warning) if 'cryptography' isn't installed —
+    this is an optional dependency, not a hard requirement."""
+    global _MEMORY_ENCRYPTION_ENABLED
+    if enabled and not _FERNET_AVAILABLE:
+        logger.warning(
+            "Memory encryption requested but the 'cryptography' package is not "
+            "installed — staying in plaintext. Install with: pip install cryptography"
+        )
+        _MEMORY_ENCRYPTION_ENABLED = False
+        return
+    _MEMORY_ENCRYPTION_ENABLED = enabled
+
+
+def _get_or_create_memory_key() -> bytes:
+    if MEMORY_KEY_FILE.exists():
+        return MEMORY_KEY_FILE.read_bytes()
+    key = Fernet.generate_key()
+    MEMORY_KEY_FILE.write_bytes(key)
+    try:
+        os.chmod(MEMORY_KEY_FILE, 0o600)
+    except Exception:
+        pass  # best-effort; not all filesystems support POSIX permissions
+    return key
+
+
 def load_memory() -> dict:
     with _memory_lock:
         if not MEMORY_FILE.exists():
             return {"sessions": []}
         try:
-            return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+            raw = MEMORY_FILE.read_bytes()
+        except Exception:
+            return {"sessions": []}
+        if raw.startswith(_MEMORY_ENC_MARKER):
+            if not _FERNET_AVAILABLE:
+                logger.warning("Memory file is encrypted but 'cryptography' is not installed — cannot read it.")
+                return {"sessions": []}
+            try:
+                key = _get_or_create_memory_key()
+                decrypted = Fernet(key).decrypt(raw[len(_MEMORY_ENC_MARKER):])
+                return json.loads(decrypted.decode("utf-8"))
+            except Exception:
+                logger.warning("Could not decrypt memory file (wrong/missing key) — resetting.")
+                return {"sessions": []}
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
             logger.warning("Corrupted memory file; resetting.")
             return {"sessions": []}
 
 
 def save_memory(mem: dict) -> None:
     with _memory_lock:
-        MEMORY_FILE.write_text(json.dumps(mem, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = json.dumps(mem, ensure_ascii=False, indent=2).encode("utf-8")
+        if _MEMORY_ENCRYPTION_ENABLED and _FERNET_AVAILABLE:
+            key = _get_or_create_memory_key()
+            token = Fernet(key).encrypt(payload)
+            MEMORY_FILE.write_bytes(_MEMORY_ENC_MARKER + token)
+        else:
+            MEMORY_FILE.write_bytes(payload)
 
 
 def append_session(entry: dict) -> None:
@@ -707,7 +918,47 @@ def check_internet(timeout: float = 3.0) -> bool:
     return False
 
 
+WEB_CACHE_DIR = CACHE_DIR / "web"
+WEB_CACHE_TTL_SECONDS = 24 * 60 * 60  # 24h
+
+
+def _web_cache_path(kind: str, key: str) -> Path:
+    h = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return WEB_CACHE_DIR / f"{kind}_{h}.json"
+
+
+def _web_cache_get(kind: str, key: str):
+    f = _web_cache_path(kind, key)
+    if not f.exists():
+        return None
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        cached_at = datetime.fromisoformat(data["cached_at"])
+        age = (datetime.now(timezone.utc) - cached_at).total_seconds()
+        if age > WEB_CACHE_TTL_SECONDS:
+            return None
+        return data.get("value")
+    except Exception:
+        return None
+
+
+def _web_cache_set(kind: str, key: str, value) -> None:
+    try:
+        WEB_CACHE_DIR.mkdir(exist_ok=True, parents=True)
+        _web_cache_path(kind, key).write_text(json.dumps({
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "value": value,
+        }, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Failed to write web cache: {e}")
+
+
 def web_search_duckduckgo(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    cache_key = f"{query}|{max_results}"
+    cached = _web_cache_get("search", cache_key)
+    if cached is not None:
+        logger.debug("Web search cache hit.")
+        return cached
     try:
         resp = requests.get(
             "https://html.duckduckgo.com/html/",
@@ -733,6 +984,8 @@ def web_search_duckduckgo(query: str, max_results: int = 5) -> List[Dict[str, st
         for i, snip in enumerate(snippets):
             if i < len(results):
                 results[i]["snippet"] = re.sub(r"<[^>]+>", "", snip).strip()
+        if results:
+            _web_cache_set("search", cache_key, results)
         return results
     except Exception as e:
         logger.debug(f"DuckDuckGo search failed: {e}")
@@ -751,6 +1004,11 @@ def fetch_page_text(url: str, max_chars: int = 3000) -> str:
         return ""
     if _SSRF_BLOCK.match(url):
         return ""
+    cache_key = f"{url}|{max_chars}"
+    cached = _web_cache_get("page", cache_key)
+    if cached is not None:
+        logger.debug("Page fetch cache hit.")
+        return cached
     try:
         resp = requests.get(
             url,
@@ -766,12 +1024,45 @@ def fetch_page_text(url: str, max_chars: int = 3000) -> str:
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
-        return text[:max_chars]
+        result = text[:max_chars]
+        if result:
+            _web_cache_set("page", cache_key, result)
+        return result
     except Exception:
         return ""
 
 
-def build_web_context(task: str, topic: str = "", max_results: int = 3, max_pages: int = 2) -> str:
+_SUMMARY_PROMPT = """Summarize the following webpage content in at most 100 words, keeping only information relevant to: {QUERY}
+
+Output ONLY the summary. No preamble, no labels, no meta-commentary.
+
+<<<CONTENT
+{CONTENT}
+CONTENT>>>
+
+Summary:"""
+
+
+def summarize_page_text(text: str, query: str, model: str, ollama_url: str = OLLAMA_URL, max_chars: int = 800) -> str:
+    """Compress fetched page text via a small Ollama call so the WEB CONTEXT
+    budget carries more actual signal than a blind truncation would. Falls
+    back to plain truncation on any failure (never raises)."""
+    if not text:
+        return text
+    if not model:
+        return text[:max_chars]
+    try:
+        prompt = _SUMMARY_PROMPT.replace("{QUERY}", query[:150]).replace("{CONTENT}", text[:4000])
+        summary = query_ollama(model, prompt, temperature=0.1, num_predict=200, timeout=30, ollama_url=ollama_url)
+        summary = summary.strip()
+        return summary[:max_chars] if summary else text[:max_chars]
+    except Exception as e:
+        logger.debug(f"Page summarization failed, falling back to truncation: {e}")
+        return text[:max_chars]
+
+
+def _fetch_web_context_now(task: str, topic: str = "", max_results: int = 3, max_pages: int = 1,
+                            summarize: bool = False, summarizer_model: str = "", summarizer_url: str = OLLAMA_URL) -> str:
     if not check_internet():
         return ""
     # Truncate to 150 chars — enough context for search, never sends full user task
@@ -788,12 +1079,154 @@ def build_web_context(task: str, topic: str = "", max_results: int = 3, max_page
         if r.get("snippet"):
             lines.append(f"  Summary: {r['snippet']}")
         if pages_fetched < max_pages and r.get("url"):
-            page_text = fetch_page_text(r["url"])
+            if summarize and summarizer_model:
+                # Fetch more raw text than we'd inject directly, then compress it —
+                # more signal survives than a blind truncation at the same final budget.
+                page_text = fetch_page_text(r["url"], max_chars=4000)
+                if page_text:
+                    page_text = summarize_page_text(page_text, query, summarizer_model, summarizer_url)
+            else:
+                page_text = fetch_page_text(r["url"])
+                if page_text:
+                    page_text = page_text[:800]
             if page_text:
-                lines.append(f"  Excerpt: {page_text[:800]}")
+                lines.append(f"  Excerpt: {page_text}")
                 pages_fetched += 1
     logger.debug(f"Web context: {len(results)} results, {pages_fetched} pages fetched.")
     return "\n".join(lines)
+
+
+# Pre-processing (an Ollama call) and web enrichment are independent until
+# both feed into build_full_prompt — preprocessing only clarifies wording, it
+# never changes domain/intent (see PRE_PROCESSOR_PROMPT's "Preserve the user's
+# intent exactly"), so a search kicked off on the RAW task text remains valid
+# once preprocessing finishes. prefetch_web_context() lets callers start the
+# search concurrently with the preprocessor call instead of strictly after it.
+_web_context_lock = threading.Lock()
+_pending_web_context: Dict[str, "concurrent.futures.Future"] = {}
+_WEB_CONTEXT_EXECUTOR = ThreadPoolExecutor(max_workers=2)
+
+
+def prefetch_web_context(task: str, topic: str = "", max_results: int = 3, max_pages: int = 1,
+                          summarize: bool = False, summarizer_model: str = "", summarizer_url: str = OLLAMA_URL) -> None:
+    """Kick off the web search/fetch in the background, keyed by topic. A
+    later build_web_context() call for the same topic will pick up this
+    result instead of re-fetching. Safe to call even if use_web is off
+    downstream — an unclaimed future is simply never awaited."""
+    with _web_context_lock:
+        if topic in _pending_web_context:
+            return
+        _pending_web_context[topic] = _WEB_CONTEXT_EXECUTOR.submit(
+            _fetch_web_context_now, task, topic, max_results, max_pages, summarize, summarizer_model, summarizer_url
+        )
+
+
+def build_web_context(task: str, topic: str = "", max_results: int = 3, max_pages: int = 1,
+                       summarize: bool = False, summarizer_model: str = "", summarizer_url: str = OLLAMA_URL) -> str:
+    with _web_context_lock:
+        future = _pending_web_context.pop(topic, None)
+    if future is not None:
+        try:
+            return future.result()
+        except Exception:
+            logger.warning("Prefetched web context failed; continuing without it.")
+            return ""
+    return _fetch_web_context_now(task, topic, max_results, max_pages, summarize, summarizer_model, summarizer_url)
+
+
+def run_deep_research(query: str, max_results: int = 8) -> str:
+    """Search, show numbered candidate results, let the user pick which to
+    fetch, then build a WEB CONTEXT block from only those sources. Requires
+    a TTY — the selection step is interactive by design. Returns "" if the
+    user cancels/selects nothing, so callers can fall back to no override
+    (letting the normal automatic enrichment run instead)."""
+    print()
+    print("  ─" * 31)
+    print("  DEEP RESEARCH — searching...")
+    print("  ─" * 31)
+    if not check_internet():
+        print("  No internet connection available.")
+        return ""
+    results = web_search_duckduckgo(query, max_results=max_results)
+    if not results:
+        print("  No results found.")
+        return ""
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {r['title']}")
+        print(f"     {r.get('url', '')}")
+        if r.get("snippet"):
+            print(f"     {r['snippet'][:150]}")
+        print()
+    print("  Select sources to include (e.g. 1,3,5 or 'all', ENTER to skip):")
+    try:
+        raw = input("  > ").strip()
+    except (KeyboardInterrupt, EOFError):
+        return ""
+    if not raw:
+        return ""
+    if raw.lower() == "all":
+        chosen_indices = list(range(1, len(results) + 1))
+    else:
+        chosen_indices = []
+        for part in raw.split(","):
+            part = part.strip()
+            if part.isdigit() and 1 <= int(part) <= len(results):
+                chosen_indices.append(int(part))
+    if not chosen_indices:
+        print("  No valid selection — skipping deep research context.")
+        return ""
+
+    lines = ["## WEB CONTEXT (deep research — manually selected sources)"]
+    for idx in chosen_indices:
+        r = results[idx - 1]
+        lines.append(f"- [{r['title']}]({r.get('url', '')})")
+        if r.get("snippet"):
+            lines.append(f"  Summary: {r['snippet']}")
+        page_text = fetch_page_text(r["url"], max_chars=3000)
+        if page_text:
+            lines.append(f"  Excerpt: {page_text[:1200]}")
+    print(f"  Included {len(chosen_indices)} source(s) in the deep research context.")
+    return "\n".join(lines)
+
+
+# ----------------------------------------------------------------------
+# Result cache — identical (model, prompt, params) requests are served from
+# disk instead of re-calling Ollama. Persists across separate CLI runs.
+# ----------------------------------------------------------------------
+_RESULT_CACHE_ENABLED = True
+
+
+def set_result_cache_enabled(enabled: bool) -> None:
+    global _RESULT_CACHE_ENABLED
+    _RESULT_CACHE_ENABLED = enabled
+
+
+def _cache_key(model: str, prompt: str, temperature: float, num_predict: int, num_ctx: int) -> str:
+    raw = f"{model}|{temperature}|{num_predict}|{num_ctx}|{prompt}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _cache_get(key: str) -> Optional[str]:
+    f = CACHE_DIR / f"{key}.json"
+    if not f.exists():
+        return None
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return data.get("response")
+    except Exception:
+        return None
+
+
+def _cache_set(key: str, model: str, response: str) -> None:
+    f = CACHE_DIR / f"{key}.json"
+    try:
+        f.write_text(json.dumps({
+            "model": model,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "response": response,
+        }, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Failed to write result cache: {e}")
 
 
 # ----------------------------------------------------------------------
@@ -808,6 +1241,31 @@ def query_ollama(
     ollama_url: str = OLLAMA_URL,
     num_ctx: int = 8192,
 ) -> str:
+    cache_key = _cache_key(model, prompt, temperature, num_predict, num_ctx)
+    if _RESULT_CACHE_ENABLED:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            logger.debug(f"Result cache hit for model {model}.")
+            return cached
+
+    if _BACKEND_TYPE == "openai_compatible":
+        is_chat = _is_chat_endpoint(ollama_url)
+        payload = _openai_compatible_payload(model, prompt, temperature, num_predict, ollama_url, stream=False)
+        try:
+            resp = requests.post(ollama_url, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            result = _openai_compatible_extract_text(data["choices"][0], is_chat) or "[Empty response]"
+        except requests.exceptions.ConnectionError:
+            raise RuntimeError(f"Could not connect to the OpenAI-compatible backend at {ollama_url}. Is it running?")
+        except requests.exceptions.Timeout:
+            raise TimeoutError(f"Timeout while waiting for model {model}.")
+        except Exception as e:
+            raise RuntimeError(f"Backend call to {model} failed: {e}")
+        if _RESULT_CACHE_ENABLED:
+            _cache_set(cache_key, model, result)
+        return result
+
     payload = {
         "model": model,
         "prompt": prompt,
@@ -822,7 +1280,10 @@ def query_ollama(
         resp = requests.post(ollama_url, json=payload, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
-        return data.get("response", "[Empty response]")
+        result = data.get("response", "[Empty response]")
+        if _RESULT_CACHE_ENABLED:
+            _cache_set(cache_key, model, result)
+        return result
     except requests.exceptions.ConnectionError:
         raise RuntimeError(f"Could not connect to Ollama at {ollama_url}. Is it running?")
     except requests.exceptions.Timeout:
@@ -841,6 +1302,54 @@ def query_ollama_stream(
     callback=None,
     num_ctx: int = 8192,
 ):
+    cache_key = _cache_key(model, prompt, temperature, num_predict, num_ctx)
+    if _RESULT_CACHE_ENABLED:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            logger.debug(f"Result cache hit for model {model}.")
+            if callback:
+                callback(cached)
+            return cached
+
+    if _BACKEND_TYPE == "openai_compatible":
+        is_chat = _is_chat_endpoint(ollama_url)
+        payload = _openai_compatible_payload(model, prompt, temperature, num_predict, ollama_url, stream=True)
+        full_text = []
+        try:
+            with requests.post(ollama_url, json=payload, timeout=timeout, stream=True) as resp:
+                resp.raise_for_status()
+                for raw_line in resp.iter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+                    token = _openai_compatible_extract_text(choices[0], is_chat)
+                    if token:
+                        full_text.append(token)
+                        if callback:
+                            callback(token)
+        except requests.exceptions.ConnectionError:
+            raise RuntimeError(f"Could not connect to the OpenAI-compatible backend at {ollama_url}. Is it running?")
+        except requests.exceptions.Timeout:
+            raise TimeoutError(f"Timeout while waiting for model {model}.")
+        except Exception as e:
+            raise RuntimeError(f"Backend stream to {model} failed: {e}")
+        result = "".join(full_text)
+        if _RESULT_CACHE_ENABLED and result:
+            _cache_set(cache_key, model, result)
+        return result
+
     payload = {
         "model": model,
         "prompt": prompt,
@@ -872,7 +1381,10 @@ def query_ollama_stream(
         raise TimeoutError(f"Timeout while waiting for model {model}.")
     except Exception as e:
         raise RuntimeError(f"Ollama stream to {model} failed: {e}")
-    return "".join(full_text)
+    result = "".join(full_text)
+    if _RESULT_CACHE_ENABLED and result:
+        _cache_set(cache_key, model, result)
+    return result
 
 
 # ----------------------------------------------------------------------
@@ -980,6 +1492,12 @@ def build_full_prompt(
     techniques: Optional[List[int]] = None,
     use_web: bool = True,
     mode: str = "full",
+    max_web_pages: int = 1,
+    draft: bool = False,
+    summarize_web_pages: bool = False,
+    web_summary_model: str = "",
+    ollama_url: str = OLLAMA_URL,
+    web_context_override: Optional[str] = None,
 ) -> str:
     # Extract /slash metacommands from the raw input
     clean_input, meta_block = parse_metacommands(user_input)
@@ -996,7 +1514,15 @@ def build_full_prompt(
             )
 
     memory_block = build_memory_context() if use_memory else ""
-    web_block = build_web_context(clean_input, topic) if use_web else ""
+    if web_context_override is not None:
+        # Deep research mode: the user hand-picked these sources — use them
+        # verbatim instead of running (or re-running) an automatic search.
+        web_block = web_context_override
+    else:
+        web_block = build_web_context(
+            clean_input, topic, max_pages=max_web_pages,
+            summarize=summarize_web_pages, summarizer_model=web_summary_model, summarizer_url=ollama_url,
+        ) if use_web else ""
     techniques_block = get_technique_boost(techniques or DEFAULT_TECHNIQUES)
 
     if mode == "quick":
@@ -1018,6 +1544,7 @@ def build_full_prompt(
             .replace("{TOPIC_FOCUS}", topic_block)
             .replace("{MEMORY_CONTEXT}", memory_block)
             .replace("{WEB_CONTEXT}", web_block)
+            .replace("{SECTION_STRUCTURE}", DRAFT_MANIFEST_STRUCTURE if draft else FULL_MANIFEST_STRUCTURE)
             .replace("---\n\n## USER INPUT",
                      f"{combined_prefix}\n\n---\n\n## USER INPUT"))
 
@@ -1175,6 +1702,10 @@ def generate_multi_topics(
     use_web: bool = True,
     stream_callback=None,
     mode: str = "full",
+    max_web_pages: int = 1,
+    draft: bool = False,
+    summarize_web_pages: bool = False,
+    web_context_override: Optional[str] = None,
 ) -> str:
     if not user_input.strip():
         raise ValueError("Task description must not be empty.")
@@ -1185,7 +1716,11 @@ def generate_multi_topics(
     for idx, topic in enumerate(topics, 1):
         label = topic if topic else "prompt"
         logger.debug(f"Generating {idx}/{len(topics)} for model {model}: '{label}'")
-        prompt = build_full_prompt(user_input, topic, use_memory, techniques, use_web, mode)
+        prompt = build_full_prompt(
+            user_input, topic, use_memory, techniques, use_web, mode, max_web_pages=max_web_pages, draft=draft,
+            summarize_web_pages=summarize_web_pages, web_summary_model=model if summarize_web_pages else "",
+            ollama_url=ollama_url, web_context_override=web_context_override,
+        )
         if stream_callback:
             text = query_ollama_stream(model, prompt, temperature, num_predict=-1, timeout=timeout, ollama_url=ollama_url, callback=stream_callback)
         else:
@@ -1219,6 +1754,10 @@ def generate_parallel_both(
     use_web: bool = True,
     live_display: bool = False,
     mode: str = "full",
+    max_web_pages: int = 1,
+    draft: bool = False,
+    summarize_web_pages: bool = False,
+    web_context_override: Optional[str] = None,
 ) -> Tuple[str, str, Path, Path]:
     if not user_input.strip():
         raise ValueError("Task description must not be empty.")
@@ -1231,12 +1770,16 @@ def generate_parallel_both(
             return generate_multi_topics(
                 model_a, user_input, topics_raw, temperature, use_memory,
                 ollama_url, timeout, techniques, use_web, stream_callback=pane.feed_a, mode=mode,
+                max_web_pages=max_web_pages, draft=draft, summarize_web_pages=summarize_web_pages,
+                web_context_override=web_context_override,
             )
 
         def worker_b():
             return generate_multi_topics(
                 model_b, user_input, topics_raw, temperature, use_memory,
                 ollama_url, timeout, techniques, use_web, stream_callback=pane.feed_b, mode=mode,
+                max_web_pages=max_web_pages, draft=draft, summarize_web_pages=summarize_web_pages,
+                web_context_override=web_context_override,
             )
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -1248,7 +1791,10 @@ def generate_parallel_both(
     else:
         def worker(model):
             return generate_multi_topics(model, user_input, topics_raw, temperature, use_memory,
-                                         ollama_url, timeout, techniques, use_web, mode=mode)
+                                         ollama_url, timeout, techniques, use_web, mode=mode,
+                                         max_web_pages=max_web_pages, draft=draft,
+                                         summarize_web_pages=summarize_web_pages,
+                                         web_context_override=web_context_override)
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             fa = pool.submit(worker, model_a)
@@ -1376,10 +1922,16 @@ def run_full_pipeline(
     live_display: bool = False,
     stream: bool = False,
     mode: str = "full",
+    max_web_pages: int = 1,
+    draft: bool = False,
+    summarize_web_pages: bool = False,
+    web_context_override: Optional[str] = None,
 ):
     out_a, out_b, fa, fb = generate_parallel_both(
         user_input, topics_raw, temperature, use_memory, ollama_url, timeout,
         model_a, model_b, techniques, use_web, live_display, mode=mode,
+        max_web_pages=max_web_pages, draft=draft, summarize_web_pages=summarize_web_pages,
+        web_context_override=web_context_override,
     )
     synthesis, fs = run_synthesis(
         user_input, out_a, out_b, temperature, use_memory, ollama_url, timeout,
@@ -1392,10 +1944,58 @@ def run_full_pipeline(
 # ----------------------------------------------------------------------
 # CLI definition
 # ----------------------------------------------------------------------
+def _resolve_technique_bundle(key: str) -> Optional[List[int]]:
+    """Resolve a QUICK_REFERENCE task-type bundle by 1-based index or
+    case-insensitive name match. Returns None if no bundle matches."""
+    if not QUICK_REFERENCE:
+        return None
+    names = list(QUICK_REFERENCE.keys())
+    if key.isdigit():
+        idx = int(key) - 1
+        if 0 <= idx < len(names):
+            return list(QUICK_REFERENCE[names[idx]])
+        return None
+    key_lower = key.lower()
+    for name in names:
+        if name.lower() == key_lower:
+            return list(QUICK_REFERENCE[name])
+    return None
+
+
+def _random_technique_subset(count_raw: str) -> List[int]:
+    """Pick a random subset of TECHNIQUES_DB, for creative exploration.
+    'random' alone uses len(DEFAULT_TECHNIQUES) as the subset size; 'random:N'
+    picks exactly N (clamped to the available pool size)."""
+    pool = list(TECHNIQUES_DB.keys())
+    if not pool:
+        return DEFAULT_TECHNIQUES
+    count = len(DEFAULT_TECHNIQUES)
+    if ":" in count_raw:
+        try:
+            count = int(count_raw.split(":", 1)[1].strip())
+        except ValueError:
+            logger.warning(f"Invalid random technique count in '{count_raw}' — using default size.")
+    count = max(1, min(count, len(pool)))
+    return sorted(random.sample(pool, count))
+
+
 def parse_techniques(techniques_raw: str) -> List[int]:
-    """Parse comma-separated technique IDs or ranges."""
+    """Parse comma-separated technique IDs, ranges, a 'bundle:<name-or-index>'
+    reference into one of the task-type bundles from prompt_expert_methodology.json
+    (see QUICK_REFERENCE — e.g. 'bundle:3' or 'bundle:Generation de code robuste'),
+    or 'random' / 'random:N' for a random subset (creative exploration mode)."""
     if not techniques_raw or not techniques_raw.strip():
         return DEFAULT_TECHNIQUES
+    techniques_raw = techniques_raw.strip()
+    if techniques_raw.lower().startswith("bundle:"):
+        key = techniques_raw.split(":", 1)[1].strip()
+        bundle = _resolve_technique_bundle(key)
+        if bundle is None:
+            logger.warning(f"Unknown technique bundle: '{key}' — falling back to defaults.")
+            return DEFAULT_TECHNIQUES
+        return sorted(set(bundle))
+    if techniques_raw.lower() == "random" or techniques_raw.lower().startswith("random:"):
+        return _random_technique_subset(techniques_raw.lower())
     result = []
     for part in techniques_raw.split(","):
         part = part.strip()
@@ -1420,12 +2020,44 @@ def common_args(parser: argparse.ArgumentParser):
     parser.add_argument("--ollama-url", default=OLLAMA_URL, help="Ollama API endpoint")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="Timeout per Ollama call in seconds")
     parser.add_argument("--no-memory", action="store_true", default=False, help="Disable session memory context")
-    parser.add_argument("--techniques", default="", help="Technique IDs: 1,5,8 or range 1-20 or 'all'")
+    parser.add_argument("--techniques", default="",
+                        help="Technique IDs: 1,5,8 or range 1-20 or 'all'. Also accepts 'bundle:<name-or-#>' "
+                             "for a task-type bundle, or 'random'/'random:N' for a random subset.")
     parser.add_argument("--mode", choices=["quick", "full"], default="full",
                         help="quick = single enhanced prompt; full = 12-section manifest (default: full)")
     parser.add_argument("--list-techniques", action="store_true", help="List all 173 prompt engineering techniques")
     parser.add_argument("--no-preprocess", action="store_true", default=False,
                         help="Skip pre-processor step (use raw input directly)")
+    parser.add_argument("--pre-processor-model", default="",
+                        help="Distinct model for the pre-processor step (e.g. a lighter/faster model). "
+                             "Falls back to the settings value, then the main model, if unset.")
+    parser.add_argument("--max-web-pages", type=int, default=1,
+                        help="Number of search-result pages to fetch full text from during web enrichment (default: 1)")
+    parser.add_argument("--offline", action="store_true", default=False,
+                        help="Fully disable web enrichment — no internet check, no search, no page fetch")
+    parser.add_argument("--quiet", action="store_true", default=False,
+                        help="Suppress all log output (equivalent to the interactive UI's log silencing)")
+    parser.add_argument("--draft", action="store_true", default=False,
+                        help="Generate only §1-2 of the 12-section manifest, for fast iteration (mode=full only)")
+    parser.add_argument("--recommend-techniques", action="store_true", default=False,
+                        help="Auto-select techniques from the task's content instead of --techniques/defaults")
+    parser.add_argument("--no-cache", action="store_true", default=False,
+                        help="Bypass the result cache — always call Ollama, even for an identical prior request")
+    parser.add_argument("--fast-preprocess", action="store_true", default=False,
+                        help="Regex-only pre-processing (whitespace/punctuation/capitalization) — no Ollama call, instant, less thorough")
+    parser.add_argument("--anonymize", action="store_true", default=False,
+                        help="Redact emails/phones/IPs/MACs/SSNs/card numbers/self-identified names from the task before it reaches any model")
+    parser.add_argument("--summarize-web-pages", action="store_true", default=False,
+                        help="Summarize fetched web pages via an extra Ollama call (using the generation model) instead of truncating raw text")
+    parser.add_argument("--deep-research", action="store_true", default=False,
+                        help="Search, show candidate sources, and let you manually pick which to include (requires an interactive terminal)")
+    parser.add_argument("--backend", choices=["ollama", "openai_compatible"], default="",
+                        help="Backend type: 'ollama' (default) or 'openai_compatible' for LM Studio / GPT4All server mode / "
+                             "text-generation-webui's OpenAI extension. Point --ollama-url at that server's endpoint "
+                             "(e.g. http://localhost:1234/v1/completions).")
+    parser.add_argument("--template", default="",
+                        help="Use a predefined task template by id (see 'templates list'). If the positional task is "
+                             "also given, it fills the template's [TOPIC] placeholder; otherwise it's left as-is.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1436,7 +2068,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # generate
     gen_parser = subparsers.add_parser("generate", help="Generate manifest with a single model")
-    gen_parser.add_argument("task", help="Task description")
+    gen_parser.add_argument("task", nargs="?", default="", help="Task description (omit if using --template)")
     gen_parser.add_argument("--topic", action="append", dest="topics", help="Topic(s) to focus on (repeatable)")
     gen_parser.add_argument("--model", default=DEFAULT_MODEL_A, help="Ollama model name")
     gen_parser.add_argument("--output", help="Output file (if omitted, auto‑generated)")
@@ -1444,7 +2076,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # parallel
     par_parser = subparsers.add_parser("parallel", help="Generate manifests from two models in parallel")
-    par_parser.add_argument("task", help="Task description")
+    par_parser.add_argument("task", nargs="?", default="", help="Task description (omit if using --template)")
     par_parser.add_argument("--topic", action="append", dest="topics", help="Topic(s) (repeatable)")
     par_parser.add_argument("--model-a", default=DEFAULT_MODEL_A, help="First model")
     par_parser.add_argument("--model-b", default=DEFAULT_MODEL_B, help="Second model")
@@ -1461,12 +2093,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     # full pipeline
     full_parser = subparsers.add_parser("full", help="Full pipeline: parallel generation + synthesis")
-    full_parser.add_argument("task", help="Task description")
+    full_parser.add_argument("task", nargs="?", default="", help="Task description (omit if using --template)")
     full_parser.add_argument("--topic", action="append", dest="topics", help="Topic(s) (repeatable)")
     full_parser.add_argument("--model-a", default=DEFAULT_MODEL_A)
     full_parser.add_argument("--model-b", default=DEFAULT_MODEL_B)
     full_parser.add_argument("--synthesis-model", default=DEFAULT_SYNTH_MODEL)
     common_args(full_parser)
+
+    # templates
+    tmpl_parser = subparsers.add_parser("templates", help="List/show predefined prompt templates")
+    tmpl_sub = tmpl_parser.add_subparsers(dest="tmpl_cmd", required=True)
+    tmpl_sub.add_parser("list", help="List all available templates")
+    tmpl_show_parser = tmpl_sub.add_parser("show", help="Show a template's full task text")
+    tmpl_show_parser.add_argument("id", help="Template id (see 'templates list')")
 
     # memory
     mem_parser = subparsers.add_parser("memory", help="Manage session memory")
@@ -1487,6 +2126,11 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    if getattr(args, "quiet", False):
+        logging.disable(logging.CRITICAL)
+    if getattr(args, "no_cache", False):
+        set_result_cache_enabled(False)
+
     # Handle --list-techniques flag if present
     if hasattr(args, "list_techniques") and args.list_techniques:
         print("Available Prompt Engineering Techniques:")
@@ -1506,21 +2150,104 @@ def main():
                 print(f"      {tech['description']}\n")
         return
 
+    if args.command == "templates":
+        if args.tmpl_cmd == "list":
+            if not PROMPT_TEMPLATES:
+                print("No templates found (prompt_templates.json missing or empty).")
+                return
+            by_category: Dict[str, List[Dict]] = {}
+            for t in PROMPT_TEMPLATES.values():
+                by_category.setdefault(t.get("category", "Other"), []).append(t)
+            for cat, tmpls in by_category.items():
+                print(f"\n[{cat}]")
+                for t in tmpls:
+                    print(f"  {t['id']:<22s} {t['title']}")
+            print("\nUse: python3 prompt_expert_enhance.py templates show <id>")
+            print("Or:  python3 prompt_expert_enhance.py generate \"my topic\" --template <id>")
+        elif args.tmpl_cmd == "show":
+            t = PROMPT_TEMPLATES.get(args.id)
+            if not t:
+                print(f"[ERROR] Unknown template '{args.id}'. Run: python3 prompt_expert_enhance.py templates list")
+                sys.exit(1)
+            print(f"{t['title']} ({t['id']})")
+            print(f"Category: {t.get('category', 'Other')}")
+            print(f"\n{t['task']}")
+        return
+
     use_memory = not args.no_memory if hasattr(args, "no_memory") else True
     techniques = parse_techniques(args.techniques) if hasattr(args, "techniques") else DEFAULT_TECHNIQUES
     mode = getattr(args, "mode", "full")
+    use_web = not getattr(args, "offline", False)
     settings = load_settings()
+    set_memory_encryption_enabled(settings.get("encrypt_memory", False))
+    backend_type = getattr(args, "backend", "") or settings.get("backend_type", "ollama")
+    set_backend_type(backend_type)
+    set_backend_api_base(getattr(args, "ollama_url", "") or settings.get("ollama_url", OLLAMA_URL))
+
+    # Resolve --template into args.task before anything else touches it
+    if getattr(args, "template", ""):
+        tmpl = PROMPT_TEMPLATES.get(args.template)
+        if not tmpl:
+            print(f"[ERROR] Unknown template '{args.template}'. Run: python3 prompt_expert_enhance.py templates list")
+            sys.exit(1)
+        topic_fill = (getattr(args, "task", "") or "").strip()
+        template_task = tmpl["task"]
+        if topic_fill:
+            template_task = template_task.replace("[TOPIC]", topic_fill)
+        else:
+            print(f"[templates] Using '{tmpl['title']}' — remember to replace [TOPIC] in the output.")
+        args.task = template_task
+
+    if args.command in ("generate", "parallel", "full") and not getattr(args, "task", ""):
+        print("[ERROR] No task provided — pass one directly or use --template <id>.")
+        sys.exit(1)
 
     # CLI pre-processor
     cli_task = sanitize_input(getattr(args, "task", ""), "text")
+    if cli_task and getattr(args, "anonymize", False):
+        cli_task, pii_labels = anonymize_pii(cli_task)
+        if pii_labels:
+            print(f"[privacy] Redacted before sending to any model: {', '.join(sorted(set(pii_labels)))}")
+        args.task = cli_task
+    if cli_task:
+        injection_labels = detect_prompt_injection(cli_task)
+        if injection_labels:
+            print(f"[warning] Input contains phrasing that resembles a prompt-injection/jailbreak attempt ({', '.join(injection_labels)}). "
+                  "Proceeding — this is advisory only, not a block.")
+    deep_research_context = None
+    if cli_task and getattr(args, "deep_research", False):
+        deep_research_context = run_deep_research(cli_task) or None
     if cli_task and not getattr(args, "no_preprocess", False) and settings.get("use_pre_processor", True):
-        pp_model = settings.get("pre_processor_model") or getattr(args, "model", settings.get("model_a", DEFAULT_MODEL_A))
-        pp_url = getattr(args, "ollama_url", OLLAMA_URL)
-        restructured = pre_process_input(cli_task, pp_model, pp_url)
+        # Skip the prefetch when summarization is on: the prefetch mechanism
+        # doesn't carry summarizer params, so a prefetched hit would bypass
+        # summarization. build_full_prompt's direct build_web_context() call
+        # handles it correctly instead — one sequential fetch instead of a
+        # parallel one, but summarization already adds its own latency.
+        if use_web and not getattr(args, "summarize_web_pages", False) and deep_research_context is None:
+            # Start the web search now, on the raw task, concurrently with the
+            # preprocessor's Ollama call below — build_full_prompt's later
+            # build_web_context() call for this same topic will reuse it instead
+            # of fetching again sequentially.
+            first_topic = (args.topics[0] if getattr(args, "topics", None) else "")
+            prefetch_web_context(cli_task, first_topic, max_pages=getattr(args, "max_web_pages", 1))
+
+        if getattr(args, "fast_preprocess", False):
+            restructured = pre_process_input_fast(cli_task)
+            tag = "pre-processor:fast"
+        else:
+            pp_model = (getattr(args, "pre_processor_model", "") or settings.get("pre_processor_model")
+                        or getattr(args, "model", settings.get("model_a", DEFAULT_MODEL_A)))
+            pp_url = getattr(args, "ollama_url", OLLAMA_URL)
+            restructured = pre_process_input(cli_task, pp_model, pp_url)
+            tag = "pre-processor"
         if restructured and restructured != cli_task:
-            print(f"[pre-processor] → {restructured[:200]}{'...' if len(restructured) > 200 else ''}")
+            print(f"[{tag}] → {restructured[:200]}{'...' if len(restructured) > 200 else ''}")
             # patch args.task with restructured version
             args.task = restructured
+
+    if getattr(args, "recommend_techniques", False) and getattr(args, "task", ""):
+        techniques = recommend_techniques(args.task)
+        print(f"[techniques] auto-recommended: {','.join(str(t) for t in techniques)}")
 
     try:
         if args.command == "generate":
@@ -1534,7 +2261,12 @@ def main():
                 ollama_url=args.ollama_url,
                 timeout=args.timeout,
                 techniques=techniques,
+                use_web=use_web,
                 mode=mode,
+                max_web_pages=args.max_web_pages,
+                draft=args.draft,
+                summarize_web_pages=args.summarize_web_pages,
+                web_context_override=deep_research_context,
             )
             if args.output:
                 Path(args.output).write_text(result, encoding="utf-8")
@@ -1547,7 +2279,9 @@ def main():
             out_a, out_b, fa, fb = generate_parallel_both(
                 args.task, topics_raw, args.temperature, use_memory,
                 args.ollama_url, args.timeout, args.model_a, args.model_b, techniques,
-                mode=mode,
+                use_web=use_web, mode=mode, max_web_pages=args.max_web_pages,
+                draft=args.draft, summarize_web_pages=args.summarize_web_pages,
+                web_context_override=deep_research_context,
             )
             print(f"Output A ({args.model_a}): outputs/{Path(fa).name}")
             print(f"Output B ({args.model_b}): outputs/{Path(fb).name}")
@@ -1570,7 +2304,10 @@ def main():
             out_a, out_b, fa, fb, synthesis, fs = run_full_pipeline(
                 args.task, topics_raw, args.temperature, use_memory,
                 args.ollama_url, args.timeout, args.model_a, args.model_b,
-                args.synthesis_model, techniques, mode=mode,
+                args.synthesis_model, techniques, use_web=use_web, mode=mode,
+                max_web_pages=args.max_web_pages, draft=args.draft,
+                summarize_web_pages=args.summarize_web_pages,
+                web_context_override=deep_research_context,
             )
             print(f"Output A ({args.model_a}): outputs/{Path(fa).name}")
             print(f"Output B ({args.model_b}): outputs/{Path(fb).name}")
@@ -1598,7 +2335,7 @@ def main():
 # ----------------------------------------------------------------------
 # Interactive launcher
 # ----------------------------------------------------------------------
-SETTINGS_FILE = BASE_DIR / "settings.json"
+SETTINGS_FILE = _DATA_DIR / "settings.json"
 
 
 def load_settings() -> dict:
@@ -1615,6 +2352,14 @@ def load_settings() -> dict:
         "output_mode": "full",
         "use_pre_processor": True,
         "pre_processor_model": "",
+        "max_web_pages": 1,
+        "draft_mode": False,
+        "use_result_cache": True,
+        "preprocessor_mode": "llm",
+        "anonymize_pii": False,
+        "encrypt_memory": False,
+        "summarize_web_pages": False,
+        "backend_type": "ollama",
     }
     if SETTINGS_FILE.exists():
         try:
@@ -1637,6 +2382,19 @@ def load_settings() -> dict:
             defaults["timeout"] = DEFAULT_TIMEOUT
     except (TypeError, ValueError):
         defaults["timeout"] = DEFAULT_TIMEOUT
+
+    try:
+        defaults["max_web_pages"] = int(defaults["max_web_pages"])
+        if not 0 <= defaults["max_web_pages"] <= 10:
+            defaults["max_web_pages"] = 1
+    except (TypeError, ValueError):
+        defaults["max_web_pages"] = 1
+
+    if defaults.get("preprocessor_mode") not in ("llm", "fast"):
+        defaults["preprocessor_mode"] = "llm"
+
+    if defaults.get("backend_type") not in ("ollama", "openai_compatible"):
+        defaults["backend_type"] = "ollama"
 
     if not isinstance(defaults["model_a"], str) or not defaults["model_a"].strip():
         defaults["model_a"] = DEFAULT_MODEL_A
@@ -1825,8 +2583,7 @@ def sanitize_input(value: str, kind: str = "text") -> str:
     if kind == "url":
         value = value.strip()
         try:
-            from urllib.parse import urlparse as _urlparse
-            p = _urlparse(value)
+            p = urlparse(value)
             if p.scheme not in ("http", "https"):
                 return ""
             if p.hostname not in ("localhost", "127.0.0.1", "::1"):
@@ -1838,6 +2595,105 @@ def sanitize_input(value: str, kind: str = "text") -> str:
     # kind == "text" (default) — always allow up to task max; callers slice further if needed
     value = value[:_MAX_TASK_LEN]
     return value.strip()
+
+
+def _luhn_valid(digits: str) -> bool:
+    """Standard Luhn checksum — used to avoid redacting arbitrary long digit
+    runs (IDs, version strings) as if they were credit card numbers."""
+    digits = re.sub(r"[ \-]", "", digits)
+    if not digits.isdigit() or not (13 <= len(digits) <= 19):
+        return False
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        n = int(ch)
+        if i % 2 == 1:
+            n *= 2
+            if n > 9:
+                n -= 9
+        total += n
+    return total % 10 == 0
+
+
+_PII_STRUCTURED_PATTERNS: List[Tuple[str, "re.Pattern"]] = [
+    ("EMAIL", re.compile(r"(?<![/@#])\b[A-Za-z0-9._%+\-]{2,}@[A-Za-z0-9.\-]{2,}\.[A-Za-z]{2,}\b")),
+    ("IPV6", re.compile(r"(?<![:/\w])(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(?![:/\w])")),
+    ("IPV4", re.compile(r"\b(?!127\.|0\.0\.0\.0|10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.)(?:\d{1,3}\.){3}\d{1,3}\b")),
+    ("MAC_ADDRESS", re.compile(r"\b(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b")),
+    ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    ("PHONE", re.compile(r"(?<!\d)(?:\+\d{1,3}[\s.\-]?)?(?:\(\d{2,4}\)[\s.\-]?)?\d{3}[\s.\-]\d{3,4}[\s.\-]?\d{0,4}(?!\d)")),
+    ("CREDIT_CARD", re.compile(r"\b(?:\d[ \-]?){13,19}\b")),
+]
+
+_PII_NAME_TRIGGER_PATTERNS = [
+    # (?i:...) scopes case-insensitivity to the trigger phrase ONLY — the name
+    # capture group must stay case-SENSITIVE, since [A-ZÀ-Ý] is what tells a
+    # real capitalized name apart from an ordinary lowercase word like "et"/"and".
+    re.compile(r"\b((?i:my name is|i am|i'm))\s+([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+){0,2})"),
+    re.compile(r"\b((?i:je m'appelle|je suis))\s+([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+){0,2})"),
+]
+
+
+def anonymize_pii(text: str) -> Tuple[str, List[str]]:
+    """Redact common PII categories from text via regex — no ML dependency,
+    opt-in only. Returns (redacted_text, labels_found).
+
+    Conservative by design: only flags structured formats (email, phone, IP,
+    MAC, SSN, Luhn-valid card numbers) plus explicit self-identification
+    phrases ("my name is X", "je m'appelle X") — not a general named-entity
+    recognizer, so it will miss names/PII mentioned without those triggers.
+    """
+    if not text:
+        return text, []
+    redacted = text
+    labels_found: List[str] = []
+    for label, pattern in _PII_STRUCTURED_PATTERNS:
+        if label == "CREDIT_CARD":
+            def _redact_card(m, _label=label):
+                if _luhn_valid(m.group(0)):
+                    labels_found.append(_label)
+                    return f"[REDACTED_{_label}]"
+                return m.group(0)
+            redacted = pattern.sub(_redact_card, redacted)
+            continue
+        if pattern.search(redacted):
+            labels_found.append(label)
+            redacted = pattern.sub(f"[REDACTED_{label}]", redacted)
+    for pattern in _PII_NAME_TRIGGER_PATTERNS:
+        def _redact_name(m):
+            return f"{m.group(1)} [REDACTED_NAME]"
+        new_redacted = pattern.sub(_redact_name, redacted)
+        if new_redacted != redacted:
+            labels_found.append("NAME")
+            redacted = new_redacted
+    return redacted, labels_found
+
+
+_PROMPT_INJECTION_PATTERNS: List[Tuple[str, "re.Pattern"]] = [
+    ("IGNORE_INSTRUCTIONS", re.compile(r"(?i)\b(ignore|disregard)\s+(all\s+|everything\s+)?(previous|prior|above|preceding)\s+(instructions?|prompts?|rules?)\b")),
+    ("IGNORE_INSTRUCTIONS_FR", re.compile(r"(?i)\b(ignore[rz]?|oublie[rz]?|disregarde[rz]?)\s+(toutes?\s+)?(les|tes|ces)\s+instructions?\s*(precedentes?|pr[ée]c[ée]dentes?|ci-dessus)?\b")),
+    ("FORGET_INSTRUCTIONS", re.compile(r"(?i)\bforget\s+(everything|all|your\s+(instructions|training|rules))\b")),
+    ("ROLE_OVERRIDE", re.compile(r"(?i)\byou\s+are\s+now\s+(a|an|no\s+longer)\b")),
+    ("REVEAL_SYSTEM_PROMPT", re.compile(r"(?i)\b(reveal|show|print|repeat)\s+(your|the)\s+(system\s+prompt|instructions|initial\s+prompt)\b")),
+    ("NO_RESTRICTIONS", re.compile(r"(?i)\b(act as if|pretend)\s+you\s+have\s+no\s+(restrictions|rules|limits|guidelines)\b")),
+    ("JAILBREAK_TOKEN", re.compile(r"(?i)\bDAN\b|\bjailbreak(ed)?\b|do\s+anything\s+now\b")),
+    ("FAKE_ROLE_TAG", re.compile(r"(?i)<\|im_(start|end)\|>|\[/?\s*(system|assistant|user)\s*\]")),
+]
+
+
+def detect_prompt_injection(text: str) -> List[str]:
+    """Heuristic detection of prompt-injection / role-override attempts in
+    raw user input (e.g. "ignore previous instructions", fake chat-template
+    role tags). This is a defense-in-depth SIGNAL, not a hard block: it also
+    fires on legitimate discussion of these topics (e.g. security research
+    about jailbreaks), so callers should warn the user, not silently strip
+    or reject the input. Returns the list of matched category labels."""
+    if not text:
+        return []
+    labels: List[str] = []
+    for label, pattern in _PROMPT_INJECTION_PATTERNS:
+        if pattern.search(text):
+            labels.append(label)
+    return labels
 
 
 def _detect_input_language(text: str) -> str:
@@ -1868,6 +2724,224 @@ def _detect_input_language(text: str) -> str:
     return "English"
 
 
+_KEYWORD_STOPWORDS = {
+    # English
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "to", "of", "in", "on", "for", "and", "or", "but", "with", "as", "by",
+    "at", "this", "that", "these", "those", "it", "its", "from", "into",
+    "about", "than", "then", "so", "such", "not", "no", "do", "does", "did",
+    "can", "could", "should", "would", "will", "shall", "may", "might",
+    "must", "you", "your", "we", "our", "they", "their", "he", "she", "his",
+    "her", "him", "them", "me", "my", "if", "when", "where", "which", "who",
+    "whom", "what", "how", "why", "have", "has", "had", "want", "need",
+    "like", "make", "get", "please", "some", "any", "all", "each", "just",
+    # French
+    "le", "la", "les", "de", "des", "du", "un", "une", "et", "en", "je",
+    "tu", "il", "elle", "nous", "vous", "ils", "elles", "que", "qui", "est",
+    "pas", "pour", "sur", "avec", "dans", "par", "mais", "ou", "comme",
+    "ce", "cette", "ces", "son", "sa", "ses", "mon", "ma", "mes", "ton",
+    "ta", "tes", "notre", "votre", "leur", "leurs", "au", "aux", "se",
+    "ne", "plus", "tout", "tous", "toute", "toutes", "être", "avoir",
+    "fait", "faire", "cela", "ça", "donc", "alors", "être", "veux", "peux",
+    "dois", "faut", "voudrais", "aimerais", "moi", "toi", "être", "tres",
+}
+
+
+def extract_keywords(text: str, max_keywords: int = 8) -> List[str]:
+    """Lightweight frequency-based keyword extraction — no ML dependency.
+    Ranks by frequency then length (longer terms tend to be more specific/
+    technical), and prefers a capitalized/mixed-case rendering of each term
+    when one exists in the source (likely a proper noun, acronym, or
+    library/technique name worth preserving verbatim)."""
+    if not text or not text.strip():
+        return []
+    tokens = re.findall(r"[A-Za-zÀ-ÿ0-9_+#\-]{3,}", text)
+    counts: Dict[str, int] = {}
+    best_case: Dict[str, str] = {}
+    for tok in tokens:
+        low = tok.lower()
+        if low in _KEYWORD_STOPWORDS:
+            continue
+        counts[low] = counts.get(low, 0) + 1
+        if low not in best_case or (tok[:1].isupper() and not best_case[low][:1].isupper()):
+            best_case[low] = tok
+    if not counts:
+        return []
+    ranked = sorted(counts.keys(), key=lambda w: (counts[w], len(w)), reverse=True)
+    return [best_case[w] for w in ranked[:max_keywords]]
+
+
+_BEGINNER_LEVEL_MARKERS = {
+    "eli5", "for beginners", "beginner", "explain simply", "simple terms",
+    "in simple terms", "never done", "first time", "new to this",
+    "not familiar", "i don't understand", "i dont understand",
+    "je débute", "debutant", "débutant", "je ne comprends pas", "jamais fait",
+    "nouveau dans", "pas familier", "explique simplement", "en termes simples",
+    "je suis nul", "aide moi à comprendre", "c'est quoi",
+}
+_EXPERT_LEVEL_MARKERS = {
+    "architecture", "production-grade", "production grade", "edge case",
+    "edge-case", "optimiz", "optimis", "algorithm", "algorithme", "complexity",
+    "complexité", "asynchron", "concurrency", "concurrence", "idempotent",
+    "throughput", "latency", "latence", "scalab", "avancé", "expert",
+    "benchmark", "profiling", "distributed", "distribué", "microservice",
+    "orchestration", "thread-safe", "threadsafe",
+}
+
+
+def detect_user_level(text: str) -> str:
+    """Heuristic beginner/intermediate/expert classification from vocabulary
+    and sentence complexity — no ML dependency. Intended only as an
+    auto-detected default: an explicit /niveau:X metacommand always overrides
+    this (checked by the caller before using the result)."""
+    if not text or not text.strip():
+        return "intermediate"
+    low = text.lower()
+    beginner_hits = sum(1 for m in _BEGINNER_LEVEL_MARKERS if m in low)
+    expert_hits = sum(1 for m in _EXPERT_LEVEL_MARKERS if m in low)
+
+    words = re.findall(r"[A-Za-zÀ-ÿ']+", text)
+    avg_word_len = (sum(len(w) for w in words) / len(words)) if words else 0
+    sentences = [s for s in re.split(r"[.!?]+", text) if s.strip()]
+    avg_sentence_len = (len(words) / len(sentences)) if sentences else len(words)
+
+    score = expert_hits - beginner_hits
+    if avg_word_len >= 6.5 and len(words) >= 12:
+        score += 1
+    if avg_word_len <= 4.2 and avg_sentence_len <= 8:
+        score -= 1
+
+    if beginner_hits > 0 and expert_hits == 0:
+        return "beginner"
+    if score >= 2:
+        return "expert"
+    if score <= -1:
+        return "beginner"
+    return "intermediate"
+
+
+_TECHNIQUE_RECOMMENDATION_TRIGGERS: Dict[str, set] = {
+    "Tache analytique precise": {
+        "analyze", "analysis", "analytic", "precise", "data", "metric", "metrics",
+        "statistic", "statistics", "rigorous", "rigoureux", "données", "analytique", "chiffres",
+    },
+    "Exploration creatrice": {
+        "creative", "brainstorm", "explore", "exploration", "imaginative", "créatif",
+        "créative", "idées", "imaginer", "inventer", "concept",
+    },
+    "Generation de code robuste": {
+        "code", "script", "function", "api", "program", "programme", "implement",
+        "coding", "développer", "fonction", "robuste", "pipeline", "algorithm",
+        "algorithme", "bug", "debug", "refactor",
+    },
+    "Decision critique": {
+        "decide", "decision", "critical", "choice", "choose", "tradeoff", "décision",
+        "critique", "choix", "arbitrage", "prioritize", "priorité",
+    },
+    "Apprentissage / explication": {
+        "explain", "learn", "teach", "understand", "tutorial", "expliquer",
+        "apprendre", "comprendre", "cours", "pédagogique", "beginner", "débutant",
+    },
+    "Audit / securite": {
+        "audit", "security", "vulnerability", "vulnerabilities", "secure", "risk",
+        "sécurité", "vulnérabilité", "risque", "pentest", "faille", "cve",
+    },
+    "Synthese de document long": {
+        "summarize", "summary", "document", "report", "synthèse", "résumer",
+        "rapport", "synthesis", "long", "digest",
+    },
+    "Output parseable / API": {
+        "json", "schema", "parse", "parsing", "structured", "endpoint", "rest", "api",
+    },
+    "Deblocage creatif": {
+        "stuck", "blocked", "unblock", "bloqué", "coincé", "débloquer", "panne",
+    },
+    "Recherche de qualite maximale": {
+        "research", "thorough", "exhaustive", "recherche", "approfondi",
+        "maximal", "maximum", "comprehensive",
+    },
+}
+
+
+def recommend_techniques(text: str, max_techniques: int = 8) -> List[int]:
+    """Heuristic technique recommendation — no ML dependency. Scores each
+    QUICK_REFERENCE task-type bucket by keyword overlap with the input, then
+    returns technique IDs from the best-matching bucket(s), highest first.
+    Falls back to DEFAULT_TECHNIQUES when nothing matches."""
+    if not QUICK_REFERENCE or not text or not text.strip():
+        return list(DEFAULT_TECHNIQUES)
+    low = text.lower()
+    scores: Dict[str, int] = {}
+    for bucket, triggers in _TECHNIQUE_RECOMMENDATION_TRIGGERS.items():
+        if bucket not in QUICK_REFERENCE:
+            continue
+        hits = sum(1 for t in triggers if t in low)
+        if hits:
+            scores[bucket] = hits
+    if not scores:
+        return list(DEFAULT_TECHNIQUES)
+    ranked_buckets = sorted(scores.keys(), key=lambda b: scores[b], reverse=True)
+    result: List[int] = []
+    for bucket in ranked_buckets:
+        for tid in QUICK_REFERENCE[bucket]:
+            if tid not in result:
+                result.append(tid)
+        if len(result) >= max_techniques:
+            break
+    return sorted(result[:max_techniques])
+
+
+def _adaptive_preprocessor_max_tokens(raw_input: str) -> int:
+    """Scale the pre-processor's token budget with input length.
+
+    PRE_PROCESSOR_PROMPT requires >=3x word growth (80-word floor) plus a
+    >=3-step breakdown for build/create tasks. A fixed 600-token cap silently
+    truncates that requirement once the raw input itself is more than ~80-100
+    words. ~2 tokens/word covers accented French text safely; +150 tokens of
+    headroom covers numbered-list scaffolding.
+    """
+    word_count = len(raw_input.split())
+    target = int(word_count * 3 * 2) + 150
+    return max(PRE_PROCESSOR_MAX_TOKENS, min(target, PRE_PROCESSOR_MAX_TOKENS_CEILING))
+
+
+def _adaptive_preprocessor_timeout(max_tokens: int) -> int:
+    """A fixed 30s timeout was sized for the old fixed 600-token budget. Scale
+    it with the token budget (conservative ~25 tok/s floor for small local
+    models on modest hardware) so larger reconstructions aren't cut off
+    mid-stream — which would silently fall back to the raw, unenhanced input.
+    """
+    return max(PRE_PROCESSOR_TIMEOUT, int(max_tokens / 25) + 10)
+
+
+def pre_process_input_fast(raw_input: str) -> str:
+    """Regex-only prompt cleanup — no Ollama call, effectively instant.
+    Fixes whitespace, punctuation spacing, and capitalization only. Unlike
+    pre_process_input(), it does NOT restructure, expand, or semantically
+    strengthen the prompt — use it for simple/short tasks or whenever speed
+    matters more than depth. Returns raw_input unchanged on any failure."""
+    if not raw_input or not raw_input.strip():
+        return raw_input
+    try:
+        text = raw_input.strip()
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        # Drop stray spaces before punctuation, ensure one space after
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+        text = re.sub(r"([,.;:!?])(?=[A-Za-zÀ-ÿ])", r"\1 ", text)
+        # Collapse accidental repeats of a single punctuation mark
+        text = re.sub(r"([,;:])\1+", r"\1", text)
+        # Capitalize the very first letter and the first letter after sentence-ending punctuation
+        text = re.sub(r"(^\s*)([a-zà-ÿ])", lambda m: m.group(1) + m.group(2).upper(), text)
+        text = re.sub(r"([.!?]\s+)([a-zà-ÿ])", lambda m: m.group(1) + m.group(2).upper(), text)
+        # Add terminal punctuation to statements that clearly lack any
+        if len(text.split()) > 3 and text and text[-1] not in ".!?\"'”)":
+            text += "."
+        return text
+    except Exception:
+        return raw_input
+
+
 def pre_process_input(
     raw_input: str,
     model: str,
@@ -1881,23 +2955,44 @@ def pre_process_input(
         return raw_input
     try:
         detected_lang = _detect_input_language(raw_input.strip())
+        keywords = extract_keywords(raw_input)
+        keywords_block = ""
+        if keywords:
+            keywords_block = (
+                "\nKEY TERMS DETECTED IN THE RAW INPUT (preserve these verbatim — do not "
+                "drop, genericize, or mistranslate them): " + ", ".join(keywords) + "\n"
+            )
+        level_block = ""
+        if "/niveau:" not in raw_input.lower():
+            detected_level = detect_user_level(raw_input)
+            if detected_level != "intermediate":
+                level_block = (
+                    f"\nAUTO-DETECTED AUDIENCE LEVEL: {detected_level}. Calibrate depth, "
+                    f"vocabulary, and assumed knowledge for a {detected_level}-level audience "
+                    "in the reconstructed prompt (this is a heuristic default — an explicit "
+                    "/niveau:X from the user always takes precedence).\n"
+                )
         prompt = (
             PRE_PROCESSOR_PROMPT
             .replace("{RAW_INPUT}", raw_input.strip())
             .replace("{DETECTED_LANG}", detected_lang)
+            .replace("{KEYWORDS_BLOCK}", keywords_block)
+            .replace("{USER_LEVEL_BLOCK}", level_block)
         )
+        max_tokens = _adaptive_preprocessor_max_tokens(raw_input)
         payload = {
             "model": sanitize_input(model, "model"),
             "prompt": prompt,
             "stream": True,
             "options": {
                 "temperature": 0.1,
-                "num_predict": PRE_PROCESSOR_MAX_TOKENS,
+                "num_predict": max_tokens,
                 "stop": ["---", "<<<", "INPUT>>>", "\n\n\n"],
             },
         }
+        effective_timeout = max(timeout, _adaptive_preprocessor_timeout(max_tokens))
         resp = requests.post(
-            ollama_url, json=payload, timeout=timeout,
+            ollama_url, json=payload, timeout=effective_timeout,
             headers={"User-Agent": HTTP_USER_AGENT}, stream=True,
         )
         result = []
@@ -1926,9 +3021,34 @@ def collect_input(settings: dict) -> Tuple[str, str, str]:
     """
     print()
     print("  ─" * 31)
-    print("  STEP 1 — Prompt to enhance")
+    print("  STEP 1 — Prompt to enhance  ('templates' to list, 'template:<id>[:topic]' to use one)")
     print("  ─" * 31)
     raw_task = input("  > ").strip()
+
+    if raw_task.lower() == "templates":
+        print()
+        by_category: Dict[str, List[Dict]] = {}
+        for t in PROMPT_TEMPLATES.values():
+            by_category.setdefault(t.get("category", "Other"), []).append(t)
+        for cat, tmpls in by_category.items():
+            print(f"  [{cat}]")
+            for t in tmpls:
+                print(f"    {t['id']:<22s} {t['title']}")
+        print()
+        print("  Enter 'template:<id>' or 'template:<id>:<topic>', or a regular prompt:")
+        raw_task = input("  > ").strip()
+
+    if raw_task.lower().startswith("template:"):
+        parts = raw_task.split(":", 2)
+        tmpl_id = parts[1].strip() if len(parts) > 1 else ""
+        topic_fill = parts[2].strip() if len(parts) > 2 else ""
+        tmpl = PROMPT_TEMPLATES.get(tmpl_id)
+        if not tmpl:
+            print(f"  [!] Unknown template '{tmpl_id}'. Type 'templates' to see available ids.")
+            return "", "", ""
+        raw_task = tmpl["task"].replace("[TOPIC]", topic_fill) if topic_fill else tmpl["task"]
+        print(f"  [template] {tmpl['title']}: {raw_task}")
+
     task = sanitize_input(raw_task, "text")
     if not task:
         print("  [!] Prompt cannot be empty.")
@@ -1936,7 +3056,7 @@ def collect_input(settings: dict) -> Tuple[str, str, str]:
 
     print()
     print("  ─" * 31)
-    print("  STEP 2 — Methods  (ENTER to skip)")
+    print("  STEP 2 — Methods  (ENTER to skip, 'auto' to auto-select techniques, 'research' for deep research)")
     for label, cmds in _METHOD_GROUPS:
         print(f"  {label}: {cmds}")
     print("  ─" * 31)
@@ -1953,6 +3073,25 @@ def collect_input(settings: dict) -> Tuple[str, str, str]:
         full_task = " ".join(all_cmds) + " " + task_clean
     else:
         full_task = task_clean
+
+    if settings.get("anonymize_pii", False):
+        full_task, pii_labels = anonymize_pii(full_task)
+        if pii_labels:
+            print(f"  [privacy] Redacted before sending to any model: {', '.join(sorted(set(pii_labels)))}")
+
+    injection_labels = detect_prompt_injection(full_task)
+    if injection_labels:
+        print(f"  [warning] Input resembles a prompt-injection/jailbreak attempt ({', '.join(injection_labels)}). Proceeding — advisory only.")
+
+    if methods_raw.strip().lower() == "auto":
+        recommended = recommend_techniques(full_task)
+        settings["techniques"] = recommended
+        print(f"  [auto-selected techniques] {','.join(str(t) for t in recommended)}")
+
+    if methods_raw.strip().lower() in ("research", "deep-research", "deepresearch"):
+        deep_context = run_deep_research(full_task)
+        if deep_context:
+            settings["_deep_research_context"] = deep_context
 
     print()
     print("  ─" * 31)
@@ -1972,31 +3111,45 @@ def collect_input(settings: dict) -> Tuple[str, str, str]:
         ollama_url = settings.get("ollama_url", OLLAMA_URL)
         do_stream = settings.get("stream", True) and sys.stdout.isatty()
 
+        if (settings.get("use_web", True) and not settings.get("summarize_web_pages", False)
+                and "_deep_research_context" not in settings):
+            first_topic = next(iter(split_topics(topics_raw)), "")
+            prefetch_web_context(full_task, first_topic, max_pages=settings.get("max_web_pages", 1))
+
+        fast_mode = settings.get("preprocessor_mode", "llm") == "fast"
+
         print()
         print("  ─" * 31)
-        print("  STEP 5 — Pre-processor  (restructuring your prompt...)")
+        if fast_mode:
+            print("  STEP 5 — Pre-processor  (fast regex cleanup, no Ollama call)")
+        else:
+            print("  STEP 5 — Pre-processor  (restructuring your prompt...)")
         print("  ─" * 31)
 
-        pp_buffer: List[str] = []
-
-        def _pp_stream(token: str):
-            pp_buffer.append(token)
-            sys.stdout.write(token)
-            sys.stdout.flush()
-
-        restructured = pre_process_input(
-            raw_input=full_task,
-            model=pp_model,
-            ollama_url=ollama_url,
-            timeout=PRE_PROCESSOR_TIMEOUT,
-            stream_callback=_pp_stream if do_stream else None,
-        )
-
-        if not do_stream:
+        if fast_mode:
+            restructured = pre_process_input_fast(full_task)
             print(f"  {restructured}")
         else:
-            if not pp_buffer:
+            pp_buffer: List[str] = []
+
+            def _pp_stream(token: str):
+                pp_buffer.append(token)
+                sys.stdout.write(token)
+                sys.stdout.flush()
+
+            restructured = pre_process_input(
+                raw_input=full_task,
+                model=pp_model,
+                ollama_url=ollama_url,
+                timeout=PRE_PROCESSOR_TIMEOUT,
+                stream_callback=_pp_stream if do_stream else None,
+            )
+
+            if not do_stream:
                 print(f"  {restructured}")
+            else:
+                if not pp_buffer:
+                    print(f"  {restructured}")
 
         print()
         print()
@@ -2029,6 +3182,7 @@ def menu_generate(settings: dict):
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
     mode = settings.get("output_mode", "full")
+    deep_research_context = settings.pop("_deep_research_context", None)
 
     print(f"\n  → Model: {model}  |  Mode: {mode.upper()}")
     if use_web and check_internet():
@@ -2053,6 +3207,10 @@ def menu_generate(settings: dict):
             use_web=use_web,
             stream_callback=print_token if do_stream else None,
             mode=mode,
+            max_web_pages=settings.get("max_web_pages", 1),
+            draft=settings.get("draft_mode", False),
+            summarize_web_pages=settings.get("summarize_web_pages", False),
+            web_context_override=deep_research_context,
         )
         if do_stream:
             print("\n")
@@ -2072,6 +3230,7 @@ def menu_parallel(settings: dict):
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
     mode = settings.get("output_mode", "full")
+    deep_research_context = settings.pop("_deep_research_context", None)
 
     print(f"\n  → {model_a}  vs  {model_b}  |  Mode: {mode.upper()}")
     if use_web and check_internet():
@@ -2094,6 +3253,10 @@ def menu_parallel(settings: dict):
             use_web=use_web,
             live_display=do_stream,
             mode=mode,
+            max_web_pages=settings.get("max_web_pages", 1),
+            draft=settings.get("draft_mode", False),
+            summarize_web_pages=settings.get("summarize_web_pages", False),
+            web_context_override=deep_research_context,
         )
         print(f"\n  Output A: outputs/{Path(fa).name}")
         print(f"  Output B: outputs/{Path(fb).name}")
@@ -2110,6 +3273,7 @@ def menu_full(settings: dict):
     use_web = settings.get("use_web", True)
     do_stream = settings.get("stream", True) and sys.stdout.isatty()
     mode = settings.get("output_mode", "full")
+    deep_research_context = settings.pop("_deep_research_context", None)
 
     print(f"\n  → {model_a} + {model_b} → {synth}  |  Mode: {mode.upper()}")
     if use_web and check_internet():
@@ -2134,6 +3298,10 @@ def menu_full(settings: dict):
             live_display=do_stream,
             stream=do_stream,
             mode=mode,
+            max_web_pages=settings.get("max_web_pages", 1),
+            draft=settings.get("draft_mode", False),
+            summarize_web_pages=settings.get("summarize_web_pages", False),
+            web_context_override=deep_research_context,
         )
         print(f"\n  Output A   : outputs/{Path(fa).name}")
         print(f"  Output B   : outputs/{Path(fb).name}")
@@ -2210,6 +3378,13 @@ def menu_configure_techniques(settings: dict):
     print("    1-10,25,40-50    ->  combination")
     print(f"    all              ->  all ({total} techniques)")
     print("    default          ->  default set")
+    print("    random           ->  random subset (creative exploration)")
+    print("    random:N         ->  random subset of exactly N techniques")
+    if QUICK_REFERENCE:
+        print("    bundle:<# or name> -> a pre-configured bundle for a task type:")
+        for i, task_type in enumerate(QUICK_REFERENCE.keys(), 1):
+            print(f"      {i}. {task_type}")
+        print("    (example: bundle:3)")
     print()
     raw = input("  Techniques: ").strip()
     if not raw:
@@ -2285,10 +3460,45 @@ def menu_advanced(settings: dict):
     print("  -- Advanced settings --")
     settings["temperature"] = prompt_float("Temperature (0.0 - 1.0)", settings["temperature"])
     settings["timeout"] = prompt_int("Timeout per call (seconds)", settings["timeout"])
-    raw_url = prompt_input("Ollama URL", settings["ollama_url"])
+    print()
+    print("  Backend:")
+    print("    ollama            —  native Ollama API (default)")
+    print("    openai_compatible —  LM Studio / GPT4All server mode / text-generation-webui's OpenAI extension")
+    raw_backend = input(f"  Backend [ollama/openai_compatible] [{settings.get('backend_type', 'ollama')}]: ").strip().lower()
+    if raw_backend in ("ollama", "openai_compatible"):
+        settings["backend_type"] = raw_backend
+    if settings.get("backend_type", "ollama") == "openai_compatible":
+        print("  Point the URL below at your server's completions endpoint, e.g.:")
+        print("    http://localhost:1234/v1/completions           (LM Studio default port)")
+        print("    http://localhost:5000/v1/chat/completions       (text-generation-webui)")
+        print("  Note: only localhost/127.0.0.1 URLs are accepted (SSRF guard) — run the server on this machine.")
+    raw_url = prompt_input("Ollama URL" if settings.get("backend_type", "ollama") == "ollama" else "Backend URL", settings["ollama_url"])
     settings["ollama_url"] = sanitize_input(raw_url, "url") or settings["ollama_url"]
+    set_backend_type(settings.get("backend_type", "ollama"))
+    set_backend_api_base(settings["ollama_url"])
     settings["use_web"] = prompt_bool("Automatic web enrichment", settings.get("use_web", True))
+    if settings["use_web"]:
+        settings["max_web_pages"] = prompt_int("Web pages to fetch full text from per search", settings.get("max_web_pages", 1))
+        settings["summarize_web_pages"] = prompt_bool(
+            "Summarize fetched pages via an extra Ollama call (vs. raw truncation)",
+            settings.get("summarize_web_pages", False),
+        )
     settings["stream"] = prompt_bool("Real-time streaming in terminal", settings.get("stream", True))
+    settings["use_result_cache"] = prompt_bool(
+        "Cache identical generations (skip Ollama on an exact repeat request)",
+        settings.get("use_result_cache", True),
+    )
+    set_result_cache_enabled(settings["use_result_cache"])
+    settings["anonymize_pii"] = prompt_bool(
+        "Redact PII (emails/phones/IPs/names) from your input before it reaches any model",
+        settings.get("anonymize_pii", False),
+    )
+    settings["encrypt_memory"] = prompt_bool(
+        "Encrypt session memory at rest (memory/sessions.json)" +
+        ("" if _FERNET_AVAILABLE else " [requires: pip install cryptography]"),
+        settings.get("encrypt_memory", False),
+    )
+    set_memory_encryption_enabled(settings["encrypt_memory"])
     print()
     print("  Output mode:")
     print("    quick  —  Single enhanced prompt, ready to paste into any LLM")
@@ -2297,19 +3507,34 @@ def menu_advanced(settings: dict):
     if raw_mode in ("quick", "full"):
         settings["output_mode"] = raw_mode
 
+    if settings.get("output_mode", "full") == "full":
+        settings["draft_mode"] = prompt_bool(
+            "Draft mode (only §1-2 of the manifest, for fast iteration)",
+            settings.get("draft_mode", False),
+        )
+
     settings["use_pre_processor"] = prompt_bool(
         "Pre-processor (restructure input before generation)",
         settings.get("use_pre_processor", True),
     )
     if settings["use_pre_processor"]:
         print()
-        print("  Pre-processor model (blank = use Model A):")
-        cur_pp = settings.get("pre_processor_model") or ""
-        raw_pp = input(f"  [{cur_pp or 'same as Model A'}] > ").strip()
-        if raw_pp:
-            settings["pre_processor_model"] = sanitize_input(raw_pp, "model")
-        else:
-            settings["pre_processor_model"] = ""
+        print("  Pre-processor mode:")
+        print("    llm   —  Ollama call: cleans, expands, strengthens the prompt (default)")
+        print("    fast  —  regex only, no Ollama call, instant — punctuation/spacing/capitalization only")
+        raw_pp_mode = input(f"  Mode [llm/fast] [{settings.get('preprocessor_mode', 'llm')}]: ").strip().lower()
+        if raw_pp_mode in ("llm", "fast"):
+            settings["preprocessor_mode"] = raw_pp_mode
+
+        if settings.get("preprocessor_mode", "llm") == "llm":
+            print()
+            print("  Pre-processor model (blank = use Model A):")
+            cur_pp = settings.get("pre_processor_model") or ""
+            raw_pp = input(f"  [{cur_pp or 'same as Model A'}] > ").strip()
+            if raw_pp:
+                settings["pre_processor_model"] = sanitize_input(raw_pp, "model")
+            else:
+                settings["pre_processor_model"] = ""
 
     save_settings(settings)
     print("\n  Settings saved.")
@@ -2320,8 +3545,13 @@ def interactive():
     logging.disable(logging.INFO)
 
     settings = load_settings()
-    ensure_ollama_ready()
-    ensure_models_available(settings)
+    set_result_cache_enabled(settings.get("use_result_cache", True))
+    set_memory_encryption_enabled(settings.get("encrypt_memory", False))
+    set_backend_type(settings.get("backend_type", "ollama"))
+    set_backend_api_base(settings.get("ollama_url", OLLAMA_URL))
+    if settings.get("backend_type", "ollama") == "ollama":
+        ensure_ollama_ready()
+        ensure_models_available(settings)
 
     _NO_PAUSE = {"0", "q", "quit", "exit", "7", "h", "help", "?"}
 
