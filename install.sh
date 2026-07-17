@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Prompturgy Installer — macOS / Linux
+#  Wild_Root_Prompt Installer — macOS / Linux
 #  Installs Ollama, Python 3, creates venv, installs deps,
-#  creates Prompturgy launcher
+#  creates Wild_Root_Prompt launcher
 # ============================================================
 set -e
 
@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 REQ_FILE="$SCRIPT_DIR/requirements.txt"
 MAIN_SCRIPT="$SCRIPT_DIR/prompt_expert_enhance.py"
-LAUNCHER="$SCRIPT_DIR/Prompturgy"
+LAUNCHER="$SCRIPT_DIR/Wild_Root_Prompt"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -27,7 +27,7 @@ step()  { echo -e "\n${BOLD}$1${NC}"; }
 
 echo ""
 echo "============================================================"
-echo "   Prompturgy  —  Automatic Installation"
+echo "   Wild_Root_Prompt  —  Automatic Installation"
 echo "   macOS / Linux"
 echo "============================================================"
 echo ""
@@ -72,7 +72,7 @@ else
     info "Ollama not found. Installing..."
     if [ "$OS_LABEL" = "Termux (Android)" ]; then
         warn "Ollama is not available for Termux/Android."
-        warn "You can use a remote Ollama server. Configure the URL in Prompturgy settings."
+        warn "You can use a remote Ollama server. Configure the URL in Wild_Root_Prompt settings."
         warn "Continuing installation without Ollama..."
     elif [ "$OS" = "Darwin" ] || [ "$OS" = "Linux" ]; then
         curl -fsSL https://ollama.com/install.sh | sh
@@ -224,7 +224,7 @@ else
 fi
 
 # --------------------------------------------------------------
-# 6. Create Prompturgy launcher
+# 6. Create Wild_Root_Prompt launcher
 # --------------------------------------------------------------
 step "6/7  Creating launcher"
 
@@ -234,7 +234,7 @@ if [ "$IS_TERMUX" = true ]; then
 #!/usr/bin/env bash
 cd "$SCRIPT_DIR"
 echo ""
-echo "  Starting Prompturgy..."
+echo "  Starting Wild_Root_Prompt..."
 echo "  Web UI: http://localhost:7860"
 echo "  CLI   : python3 prompt_expert_enhance.py"
 echo ""
@@ -276,7 +276,7 @@ ok "Launcher created: $LAUNCHER"
 
 # macOS: also create a .command file for Finder double-click
 if [ "$OS" = "Darwin" ]; then
-    COMMAND_LAUNCHER="$SCRIPT_DIR/Prompturgy.command"
+    COMMAND_LAUNCHER="$SCRIPT_DIR/Wild_Root_Prompt.command"
     cat > "$COMMAND_LAUNCHER" << 'COMMAND_SCRIPT'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -289,7 +289,7 @@ fi
 python3 prompt_expert_enhance.py --web
 COMMAND_SCRIPT
     chmod +x "$COMMAND_LAUNCHER"
-    ok "macOS Finder launcher: Prompturgy.command (double-click to open)"
+    ok "macOS Finder launcher: Wild_Root_Prompt.command (double-click to open)"
 fi
 
 # --------------------------------------------------------------
@@ -302,7 +302,7 @@ echo -e "${GREEN}   Installation complete!${NC}"
 echo "============================================================"
 echo ""
 if [ "$IS_TERMUX" = true ]; then
-    echo "  Launch Prompturgy:"
+    echo "  Launch Wild_Root_Prompt:"
     echo -e "  ${CYAN}$LAUNCHER${NC}"
     echo ""
     echo "  Or directly:"
@@ -310,13 +310,13 @@ if [ "$IS_TERMUX" = true ]; then
 elif [ "$OS" = "Darwin" ]; then
     echo "  Launch options:"
     echo ""
-    echo -e "  ${CYAN}Double-click:  Prompturgy.command${NC}   ← opens web UI in browser"
-    echo -e "  ${CYAN}Terminal:      ./Prompturgy${NC}          ← same, from terminal"
+    echo -e "  ${CYAN}Double-click:  Wild_Root_Prompt.command${NC}   ← opens web UI in browser"
+    echo -e "  ${CYAN}Terminal:      ./Wild_Root_Prompt${NC}          ← same, from terminal"
     echo -e "  ${CYAN}CLI only:      source .venv/bin/activate && python3 prompt_expert_enhance.py${NC}"
 else
     echo "  Launch options:"
     echo ""
-    echo -e "  ${CYAN}./Prompturgy${NC}    ← opens web UI in browser"
+    echo -e "  ${CYAN}./Wild_Root_Prompt${NC}    ← opens web UI in browser"
     echo -e "  ${CYAN}source .venv/bin/activate && python3 prompt_expert_enhance.py${NC}  ← CLI"
 fi
 echo ""

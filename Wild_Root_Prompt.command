@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prompturgy — macOS Finder double-click launcher
+# Wild_Root_Prompt — macOS Finder double-click launcher
 # Opens the web UI at http://localhost:7860
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,7 +22,7 @@ if ! curl -s "http://localhost:11434/api/tags" &>/dev/null; then
 fi
 
 echo ""
-echo "  Prompturgy — Starting web UI..."
+echo "  Wild_Root_Prompt — Starting web UI..."
 echo "  URL: http://localhost:7860"
 echo "  Press Ctrl+C to stop."
 echo ""

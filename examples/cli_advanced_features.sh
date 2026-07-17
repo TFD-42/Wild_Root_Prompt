@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prompturgy — advanced/newer CLI features.
+# Wild_Root_Prompt — advanced/newer CLI features.
 # Run from the repo root: bash examples/cli_advanced_features.sh
 # Requires: ollama serve running, at least one model pulled.
 set -e

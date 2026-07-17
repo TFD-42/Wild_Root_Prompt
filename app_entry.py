@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Prompturgy — compiled app entry point.
+Wild_Root_Prompt — compiled app entry point.
 
 This is the script build_app.py bundles into the standalone app via
-PyInstaller. It mirrors Prompturgy.command's day-to-day launch behavior
+PyInstaller. It mirrors Wild_Root_Prompt.command's day-to-day launch behavior
 (start Ollama if needed, launch the web UI, open the browser) in pure
 Python so it works identically whether run from source or as a compiled
 binary — no shell wrapper required.
@@ -24,11 +24,11 @@ from web_server import run_web_server
 
 
 def main() -> int:
-    print("Prompturgy starting...")
+    print("Wild_Root_Prompt starting...")
 
     if not is_ollama_installed():
         print("Ollama is not installed. Opening the download page — "
-              "install it, then relaunch Prompturgy.")
+              "install it, then relaunch Wild_Root_Prompt.")
         try:
             webbrowser.open("https://ollama.com/download")
         except Exception:

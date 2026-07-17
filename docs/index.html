@@ -3,33 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prompturgy — Local AI Prompt Enhancement Tool | 173 Prompt Engineering Techniques</title>
+<title>Wild_Root_Prompt — Local AI Prompt Enhancement Tool | 173 Prompt Engineering Techniques</title>
 <meta name="description" content="Transform any raw prompt into expert-level output using local LLMs via Ollama. 173 prompt engineering techniques across 15 categories — Chain-of-Thought, Tree-of-Thought, ReAct, MECE. No cloud API keys, no data sent to external servers. Free & open-source.">
 <meta name="keywords" content="prompt engineering, local LLM, Ollama, prompt optimization, chain of thought, tree of thought, ReAct, MECE, AI agents, open source AI, privacy-first AI, offline AI, LLM enhancement">
 <meta name="author" content="TFD-42">
-<link rel="canonical" href="https://tfd-42.github.io/Prompturgy/">
+<link rel="canonical" href="https://tfd-42.github.io/Wild_Root_Prompt/">
 <link rel="icon" type="image/png" href="assets/icon.png">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Prompturgy — Local AI Prompt Enhancement Tool">
+<meta property="og:title" content="Wild_Root_Prompt — Local AI Prompt Enhancement Tool">
 <meta property="og:description" content="Transform any raw prompt into expert-level output using local LLMs via Ollama. 173 prompt engineering techniques, no cloud, no API keys.">
-<meta property="og:image" content="https://tfd-42.github.io/Prompturgy/assets/social-preview.png">
-<meta property="og:url" content="https://tfd-42.github.io/Prompturgy/">
-<meta property="og:site_name" content="Prompturgy">
+<meta property="og:image" content="https://tfd-42.github.io/Wild_Root_Prompt/assets/social-preview.png">
+<meta property="og:url" content="https://tfd-42.github.io/Wild_Root_Prompt/">
+<meta property="og:site_name" content="Wild_Root_Prompt">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Prompturgy — Local AI Prompt Enhancement Tool">
+<meta name="twitter:title" content="Wild_Root_Prompt — Local AI Prompt Enhancement Tool">
 <meta name="twitter:description" content="173 prompt engineering techniques, powered by Ollama. No cloud, no API keys, no data leaves your machine.">
-<meta name="twitter:image" content="https://tfd-42.github.io/Prompturgy/assets/social-preview.png">
+<meta name="twitter:image" content="https://tfd-42.github.io/Wild_Root_Prompt/assets/social-preview.png">
 
 <!-- Structured data: SoftwareApplication -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Prompturgy",
+  "name": "Wild_Root_Prompt",
   "description": "Local AI prompt enhancement tool with 173 prompt engineering techniques across 15 categories, powered by Ollama. No cloud API keys, no data sent to external servers.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Windows, Linux",
@@ -39,8 +39,8 @@
     "priceCurrency": "USD"
   },
   "license": "https://opensource.org/licenses/MIT",
-  "url": "https://tfd-42.github.io/Prompturgy/",
-  "codeRepository": "https://github.com/TFD-42/Prompturgy",
+  "url": "https://tfd-42.github.io/Wild_Root_Prompt/",
+  "codeRepository": "https://github.com/TFD-42/Wild_Root_Prompt",
   "programmingLanguage": "Python",
   "author": {
     "@type": "Person",
@@ -52,7 +52,7 @@
 <style>
 :root {
   --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3250;
-  --accent: #6c7fff; --accent2: #a78bfa; --green: #4ade80; --text: #e2e8f0; --muted: #8892a4;
+  --accent: #5fae82; --accent2: #a8e6c1; --green: #8ed9ae; --text: #e2e8f0; --muted: #8892a4;
   --font: -apple-system, 'Segoe UI', system-ui, sans-serif;
   --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
 }
@@ -65,24 +65,24 @@ a:hover { text-decoration: underline; }
 
 header {
   padding: 100px 0 70px;
-  background: radial-gradient(ellipse at top right, rgba(108,127,255,0.15), transparent 60%);
+  background: radial-gradient(ellipse at top right, rgba(95,174,130,0.15), transparent 60%);
   border-bottom: 1px solid var(--border);
 }
 .hero { display: flex; align-items: center; gap: 40px; flex-wrap: wrap; }
-.hero img.icon { width: 120px; height: 120px; border-radius: 26px; box-shadow: 0 20px 60px rgba(108,127,255,0.3); }
+.hero img.icon { width: 120px; height: 120px; border-radius: 26px; box-shadow: 0 20px 60px rgba(95,174,130,0.3); }
 .hero h1 { font-size: 3rem; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 12px; }
 .hero h1 span { color: var(--accent2); }
 .hero p.tagline { font-size: 1.15rem; color: var(--muted); max-width: 600px; }
 
 .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 .badge { padding: 6px 14px; border-radius: 20px; font-size: 0.82rem; font-weight: 600;
-  background: rgba(108,127,255,0.12); border: 1px solid rgba(108,127,255,0.3); color: var(--accent2); }
+  background: rgba(95,174,130,0.12); border: 1px solid rgba(95,174,130,0.3); color: var(--accent2); }
 .badge.green { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: var(--green); }
 
 .cta-row { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
 .btn { padding: 13px 26px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; display: inline-block; }
 .btn-primary { background: var(--accent); color: white; }
-.btn-primary:hover { background: #5a6ef0; text-decoration: none; }
+.btn-primary:hover { background: #4f9a70; text-decoration: none; }
 .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
 
@@ -111,9 +111,9 @@ footer a { color: var(--muted); }
 <header>
   <div class="container">
     <div class="hero">
-      <img class="icon" src="assets/icon.png" alt="Prompturgy logo">
+      <img class="icon" src="assets/icon.png" alt="Wild_Root_Prompt logo">
       <div>
-        <h1>Prompt<span>urgy</span></h1>
+        <h1>Wild_Root<span>_Prompt</span></h1>
         <p class="tagline">Transform any raw prompt into expert-level output using local LLMs via Ollama — no cloud API keys, no data sent to external servers.</p>
         <div class="badges">
           <span class="badge green">100% Local</span>
@@ -124,16 +124,16 @@ footer a { color: var(--muted); }
       </div>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/TFD-42/Prompturgy">View on GitHub</a>
-      <a class="btn btn-secondary" href="https://github.com/TFD-42/Prompturgy/releases/latest">Download compiled app</a>
-      <a class="btn btn-secondary" href="https://github.com/TFD-42/Prompturgy#quick-start">Quick Start</a>
+      <a class="btn btn-primary" href="https://github.com/TFD-42/Wild_Root_Prompt">View on GitHub</a>
+      <a class="btn btn-secondary" href="https://github.com/TFD-42/Wild_Root_Prompt/releases/latest">Download compiled app</a>
+      <a class="btn btn-secondary" href="https://github.com/TFD-42/Wild_Root_Prompt#quick-start">Quick Start</a>
     </div>
   </div>
 </header>
 
 <section>
   <div class="container">
-    <h2>Why Prompturgy?</h2>
+    <h2>Why Wild_Root_Prompt?</h2>
     <div class="grid">
       <div class="card">
         <h3>Research-backed techniques</h3>
@@ -169,7 +169,7 @@ footer a { color: var(--muted); }
       <li><strong>Persona & role</strong> — Expert persona, multi-persona debate, devil's advocate</li>
       <li><strong>Structural</strong> — Instruction decomposition, prompt chaining</li>
     </ul>
-    <p style="margin-top:24px;"><a href="https://github.com/TFD-42/Prompturgy#prompt-engineering-techniques">See the full list on GitHub →</a></p>
+    <p style="margin-top:24px;"><a href="https://github.com/TFD-42/Wild_Root_Prompt#prompt-engineering-techniques">See the full list on GitHub →</a></p>
   </div>
 </section>
 
@@ -177,10 +177,10 @@ footer a { color: var(--muted); }
   <div class="container">
     <h2>Quick Start</h2>
     <p style="color:var(--muted);margin-bottom:16px;">macOS / Linux:</p>
-    <pre>git clone https://github.com/TFD-42/Prompturgy.git && cd Prompturgy && chmod +x install.sh && ./install.sh</pre>
+    <pre>git clone https://github.com/TFD-42/Wild_Root_Prompt.git && cd Wild_Root_Prompt && chmod +x install.sh && ./install.sh</pre>
     <p style="color:var(--muted);margin:20px 0 16px;">Or download a compiled app — no Python required:</p>
     <div class="cta-row" style="margin-top:0;">
-      <a class="btn btn-secondary" href="https://github.com/TFD-42/Prompturgy/releases/latest">Latest Release ↗</a>
+      <a class="btn btn-secondary" href="https://github.com/TFD-42/Wild_Root_Prompt/releases/latest">Latest Release ↗</a>
     </div>
   </div>
 </section>
@@ -200,7 +200,7 @@ footer a { color: var(--muted); }
 
 <footer>
   <div class="container">
-    <p>MIT Licensed · <a href="https://github.com/TFD-42/Prompturgy">GitHub</a> · <a href="https://github.com/TFD-42/Prompturgy/issues">Issues</a></p>
+    <p>MIT Licensed · <a href="https://github.com/TFD-42/Wild_Root_Prompt">GitHub</a> · <a href="https://github.com/TFD-42/Wild_Root_Prompt/issues">Issues</a></p>
   </div>
 </footer>
 

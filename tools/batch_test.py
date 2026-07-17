@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Prompturgy — Batch Pre-processor Test Suite
+Wild_Root_Prompt — Batch Pre-processor Test Suite
 500 prompts across 12 categories, parallel execution, full analysis.
 
 Usage:
@@ -724,7 +724,7 @@ def analyze(results: list) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prompturgy batch test suite — 500 prompts")
+    parser = argparse.ArgumentParser(description="Wild_Root_Prompt batch test suite — 500 prompts")
     parser.add_argument("--model", default="qwen2.5:3b", help="Model for pre-processor (fast model recommended)")
     parser.add_argument("--workers", type=int, default=6, help="Parallel workers")
     parser.add_argument("--out", default="tools/test_results.json", help="Output JSON file")
@@ -735,7 +735,7 @@ def main():
     total = len(prompts)
     out_path = BASE_DIR / args.out
 
-    print(f"\n  Prompturgy Batch Test Suite")
+    print(f"\n  Wild_Root_Prompt Batch Test Suite")
     print(f"  {'─' * 50}")
     print(f"  Prompts : {total}")
     print(f"  Model   : {args.model}")

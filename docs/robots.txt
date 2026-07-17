@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tfd-42.github.io/Prompturgy/sitemap.xml
+Sitemap: https://tfd-42.github.io/Wild_Root_Prompt/sitemap.xml

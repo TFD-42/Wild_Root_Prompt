@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Prompturgy – Expert Prompt Enhancement Tool powered by Ollama.
+Wild_Root_Prompt – Expert Prompt Enhancement Tool powered by Ollama.
 
 Version: 2.3.0
 
@@ -88,11 +88,11 @@ def _user_data_dir() -> Path:
     if not _is_frozen():
         return BASE_DIR
     if sys.platform == "darwin":
-        data_dir = Path.home() / "Library" / "Application Support" / "Prompturgy"
+        data_dir = Path.home() / "Library" / "Application Support" / "Wild_Root_Prompt"
     elif sys.platform == "win32":
-        data_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "Prompturgy"
+        data_dir = Path(os.environ.get("APPDATA", str(Path.home()))) / "Wild_Root_Prompt"
     else:
-        data_dir = Path.home() / ".prompturgy"
+        data_dir = Path.home() / ".wild_root_prompt"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -113,7 +113,7 @@ DEFAULT_TEMPERATURE = 0.3
 # Generic, non-identifying HTTP User-Agent for web enrichment requests.
 # Change this string if you want to identify the tool differently,
 # but never include real OS, device, or browser version info here.
-HTTP_USER_AGENT = "Mozilla/5.0 (compatible; ManifestGen/2.1; +https://github.com/TFD-42/Prompturgy)"
+HTTP_USER_AGENT = "Mozilla/5.0 (compatible; ManifestGen/2.1; +https://github.com/TFD-42/Wild_Root_Prompt)"
 DEFAULT_TIMEOUT = 600  # seconds for a single Ollama call
 SYNTH_TIMEOUT = 1200   # longer timeout for synthesis
 
@@ -2062,7 +2062,7 @@ def common_args(parser: argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Prompturgy: enhance any prompt using 173 prompt-engineering techniques via Ollama."
+        description="Wild_Root_Prompt: enhance any prompt using 173 prompt-engineering techniques via Ollama."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -2464,7 +2464,7 @@ def print_banner(settings: dict):
     web_st = "ON" if settings.get("use_web", True) and check_internet() else "OFF"
     stream_st = "ON" if settings.get("stream", True) else "OFF"
     print("=" * 62)
-    print("   PROMPTURGY  —  Expert Prompt Enhancement Tool  v2.3")
+    print("   WILD_ROOT_PROMPT  —  Expert Prompt Enhancement Tool  v2.3")
     print("=" * 62)
     print(f"   Model A     : {settings['model_a']}")
     print(f"   Model B     : {settings['model_b']}")
@@ -2504,7 +2504,7 @@ def print_menu():
 def print_help():
     print()
     print("  " + "=" * 58)
-    print("  PROMPTURGY — Help")
+    print("  WILD_ROOT_PROMPT — Help")
     print("  " + "=" * 58)
     print()
     print("  HOW IT WORKS")
