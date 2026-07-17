@@ -1,17 +1,17 @@
-# Using Pro-Prompt with LM Studio / text-generation-webui / GPT4All
+# Using Prompturgy with LM Studio / text-generation-webui / GPT4All
 
-Pro-Prompt defaults to Ollama, but also speaks the OpenAI-compatible
+Prompturgy defaults to Ollama, but also speaks the OpenAI-compatible
 completions API that LM Studio, text-generation-webui (via its OpenAI
 extension), and GPT4All's server mode all expose. One adapter covers all
 three since they share the same wire format.
 
 **Note:** for security (SSRF prevention), the backend URL must resolve to
-`localhost`/`127.0.0.1` — run the server on the same machine as Pro-Prompt.
+`localhost`/`127.0.0.1` — run the server on the same machine as Prompturgy.
 
 ## LM Studio
 
 1. In LM Studio, load a model and start the local server (default port `1234`).
-2. Run Pro-Prompt against it:
+2. Run Prompturgy against it:
 
 ```bash
 python3 prompt_expert_enhance.py generate "explain quicksort" \
@@ -23,7 +23,7 @@ python3 prompt_expert_enhance.py generate "explain quicksort" \
 ## text-generation-webui
 
 1. Enable the `openai` extension and start the server (default port `5000`).
-2. Point Pro-Prompt at either its completions or chat endpoint:
+2. Point Prompturgy at either its completions or chat endpoint:
 
 ```bash
 python3 prompt_expert_enhance.py generate "explain quicksort" \

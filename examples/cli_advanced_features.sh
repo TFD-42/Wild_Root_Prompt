@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pro-Prompt — advanced/newer CLI features.
+# Prompturgy — advanced/newer CLI features.
 # Run from the repo root: bash examples/cli_advanced_features.sh
 # Requires: ollama serve running, at least one model pulled.
 set -e

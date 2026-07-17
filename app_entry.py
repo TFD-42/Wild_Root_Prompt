@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Pro-Prompt — compiled app entry point.
+Prompturgy — compiled app entry point.
 
 This is the script build_app.py bundles into the standalone app via
-PyInstaller. It mirrors Pro_Prompt.command's day-to-day launch behavior
+PyInstaller. It mirrors Prompturgy.command's day-to-day launch behavior
 (start Ollama if needed, launch the web UI, open the browser) in pure
 Python so it works identically whether run from source or as a compiled
 binary — no shell wrapper required.
@@ -24,11 +24,11 @@ from web_server import run_web_server
 
 
 def main() -> int:
-    print("Pro-Prompt starting...")
+    print("Prompturgy starting...")
 
     if not is_ollama_installed():
         print("Ollama is not installed. Opening the download page — "
-              "install it, then relaunch Pro-Prompt.")
+              "install it, then relaunch Prompturgy.")
         try:
             webbrowser.open("https://ollama.com/download")
         except Exception:

@@ -1,4 +1,4 @@
-# Pro-Prompt — Local LLM Prompt Enhancement Tool v2.3
+# Prompturgy — Local LLM Prompt Enhancement Tool v2.3
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
@@ -14,7 +14,7 @@
 ![Capture d’écran 2026-07-13 à 23 45 35](https://github.com/user-attachments/assets/dd919e34-f77a-45fb-8b47-4d009e62debc)
 
 
-Pro-Prompt enhances any prompt before it reaches your LLM. A **pre-processor** first restructures and clarifies your raw input, then applies **173 prompt engineering techniques** across 15 categories (Chain-of-Thought, Tree-of-Thought, ReAct, MECE, red teaming, and more) to generate exhaustive, high-quality outputs. Novice users get a **local web UI** (one click); power users get a full **CLI** with parallel dual-model generation, split-screen streaming, and expert synthesis.
+Prompturgy enhances any prompt before it reaches your LLM. A **pre-processor** first restructures and clarifies your raw input, then applies **173 prompt engineering techniques** across 15 categories (Chain-of-Thought, Tree-of-Thought, ReAct, MECE, red teaming, and more) to generate exhaustive, high-quality outputs. Novice users get a **local web UI** (one click); power users get a full **CLI** with parallel dual-model generation, split-screen streaming, and expert synthesis.
 
 **Keywords:** Prompt engineering · Local LLM · Ollama · Open-source AI · Prompt optimization · LLM enhancement · Chain-of-Thought · Tree-of-Thought · ReAct · MECE · Prompt techniques · AI agents · Llama · Qwen · Dolphin · Privacy-first · Offline AI
 
@@ -28,18 +28,18 @@ Pro-Prompt enhances any prompt before it reaches your LLM. A **pre-processor** f
 
 ---
 
-## Why Pro-Prompt?
+## Why Prompturgy?
 
-**Unlike generic prompt builders**, Pro-Prompt implements **academic prompt engineering theory** (Chain-of-Thought, ReAct, MECE, Constitutional AI, and 15+ other frameworks) across **173 distinct techniques**. Every technique is researched, categorized, and applied *before* your LLM sees the input — so even simple models produce expert-tier outputs.
+**Unlike generic prompt builders**, Prompturgy implements **academic prompt engineering theory** (Chain-of-Thought, ReAct, MECE, Constitutional AI, and 15+ other frameworks) across **173 distinct techniques**. Every technique is researched, categorized, and applied *before* your LLM sees the input — so even simple models produce expert-tier outputs.
 
-**Unlike cloud-first tools**, Pro-Prompt runs **100% locally**:
+**Unlike cloud-first tools**, Prompturgy runs **100% locally**:
 - ✅ No API calls to external servers
 - ✅ Your data stays on your machine
 - ✅ No subscription fees — MIT licensed
 - ✅ Works offline (except optional web enrichment)
 - ✅ Powered by free, open-source [Ollama](https://ollama.com)
 
-**Unlike single-model tools**, Pro-Prompt can:
+**Unlike single-model tools**, Prompturgy can:
 - Run **two LLMs in parallel** with split-screen streaming
 - **Synthesize** both outputs into a unified superior document
 - **Combine** multiple generations end-to-end via full pipeline
@@ -64,7 +64,7 @@ Pro-Prompt enhances any prompt before it reaches your LLM. A **pre-processor** f
 | **Web enrichment** | Automatic DuckDuckGo search for real-world context (toggleable, SSRF-protected) |
 | **Model auto-detection** | Lists locally installed Ollama models with numbered picker at each run |
 | **First-run guidance** | If no models installed, offers guided pull with RAM requirements |
-| **One-click launchers** | `Pro_Prompt.command` (macOS) · `Pro_Prompt.bat` (Windows) · `Pro_Prompt` (Linux) |
+| **One-click launchers** | `Prompturgy.command` (macOS) · `Prompturgy.bat` (Windows) · `Prompturgy` (Linux) |
 | **Cross-platform install** | `install.sh` (macOS/Linux) · `install.ps1` (Windows) · `install_termux.sh` (Android) |
 | **Zero-trust security** | Input sanitization, SSRF block, no PII in logs, random session key |
 | **Session memory** | Tracks past runs for cross-session coherence |
@@ -80,8 +80,8 @@ Pro-Prompt enhances any prompt before it reaches your LLM. A **pre-processor** f
 
 | Platform | Just double-click |
 |----------|--------|
-| **macOS** | `Install Pro-Prompt.command` |
-| **Windows** | `Install Pro-Prompt.bat` |
+| **macOS** | `Install Prompturgy.command` |
+| **Windows** | `Install Prompturgy.bat` |
 
 Both detect what's already installed and run the full setup (Ollama, Python 3, virtual environment, dependencies) automatically, ending with a one-click day-to-day launcher (see below). The Windows wrapper runs PowerShell with `-ExecutionPolicy Bypass` scoped to that single launch only — it does not change your system's script-execution policy.
 
@@ -90,19 +90,19 @@ Both detect what's already installed and run the full setup (Ollama, Python 3, v
 macOS / Linux:
 
 ```bash
-git clone https://github.com/TFD-42/Pro-Prompt.git && cd Pro-Prompt && chmod +x install.sh && ./install.sh
+git clone https://github.com/TFD-42/Prompturgy.git && cd Prompturgy && chmod +x install.sh && ./install.sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/TFD-42/Pro-Prompt.git; cd Pro-Prompt; powershell -ExecutionPolicy Bypass -File install.ps1
+git clone https://github.com/TFD-42/Prompturgy.git; cd Prompturgy; powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Android / Termux:
 
 ```bash
-git clone https://github.com/TFD-42/Pro-Prompt.git && cd Pro-Prompt && chmod +x install_termux.sh && ./install_termux.sh
+git clone https://github.com/TFD-42/Prompturgy.git && cd Prompturgy && chmod +x install_termux.sh && ./install_termux.sh
 ```
 
 The installer handles everything: Ollama, Python 3, virtual environment, and dependencies. It also creates a one-click launcher.
@@ -111,13 +111,13 @@ The installer handles everything: Ollama, Python 3, virtual environment, and dep
 
 | Platform | Action |
 |----------|--------|
-| **macOS** | Double-click `Pro_Prompt.command` in Finder |
-| **Windows** | Double-click `Pro_Prompt.bat` |
-| **Linux** | Run `./Pro_Prompt` in terminal |
+| **macOS** | Double-click `Prompturgy.command` in Finder |
+| **Windows** | Double-click `Prompturgy.bat` |
+| **Linux** | Run `./Prompturgy` in terminal |
 | **Any** | `python3 prompt_expert_enhance.py --web` |
 
 Opens `http://localhost:7860` in your browser automatically. On macOS, if
-Chrome, Firefox, Brave, Edge, Arc, or Opera is installed, Pro-Prompt opens
+Chrome, Firefox, Brave, Edge, Arc, or Opera is installed, Prompturgy opens
 that instead of Safari — see **Troubleshooting** below for why.
 
 ### Launch — CLI (power users)
@@ -134,7 +134,7 @@ Launches the interactive numbered menu. No arguments needed.
 ### Build a standalone compiled app (single icon, no terminal)
 
 After running the installer once (so dependencies exist in `.venv`), you can
-compile Pro-Prompt into one native app with its own icon:
+compile Prompturgy into one native app with its own icon:
 
 ```bash
 source .venv/bin/activate           # Linux/macOS
@@ -147,14 +147,14 @@ Produces:
 
 | Platform | Output |
 |----------|--------|
-| **macOS** | `dist/Pro-Prompt.app` — drag to /Applications, double-click to launch |
-| **Windows** | `dist/Pro-Prompt.exe` — double-click to launch |
-| **Linux** | `dist/Pro-Prompt` — single binary; run it, or wire up a `.desktop` file for a menu icon |
+| **macOS** | `dist/Prompturgy.app` — drag to /Applications, double-click to launch |
+| **Windows** | `dist/Prompturgy.exe` — double-click to launch |
+| **Linux** | `dist/Prompturgy` — single binary; run it, or wire up a `.desktop` file for a menu icon |
 
 The compiled app starts Ollama if needed and opens the web UI in your
 browser — it needs no Python install or virtual environment at runtime.
 Its data (settings, memory, cache, outputs) lives in a standard per-OS user
-data folder (e.g. `~/Library/Application Support/Pro-Prompt` on macOS)
+data folder (e.g. `~/Library/Application Support/Prompturgy` on macOS)
 rather than next to the app bundle, since app bundles are read-only.
 
 ### CLI Mode
@@ -189,7 +189,7 @@ caching, deep research, alternate backends) and the REST API.
 
 ```
 ==============================================================
-   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.2
+   PROMPTURGY  —  Expert Prompt Enhancement Tool  v2.2
 ==============================================================
    Model A     : llama3:latest
    Model B     : qwen2.5:7b
@@ -217,7 +217,7 @@ caching, deep research, alternate backends) and the REST API.
 
 ### Model Picker
 
-When selecting a model, Pro-Prompt lists all locally installed models:
+When selecting a model, Prompturgy lists all locally installed models:
 
 ```
   -- Generation model --
@@ -236,7 +236,7 @@ Type a number to select, a model name to pull, or Enter to keep the current one.
 
 ## Prompt Engineering Techniques
 
-Pro-Prompt ships with **173 techniques** across **15 categories** in `prompt_expert_methodology.json`, plus **8 anti-patterns** and a **quick-reference matrix** for task-based technique selection.
+Prompturgy ships with **173 techniques** across **15 categories** in `prompt_expert_methodology.json`, plus **8 anti-patterns** and a **quick-reference matrix** for task-based technique selection.
 
 **Research-backed methods included:**
 - **Chain-of-Thought (CoT)** — Reasoning through intermediate steps
@@ -286,7 +286,7 @@ In the interactive menu, use option `6` to configure or option `7` to browse (gr
 
 ## Web Enrichment
 
-When internet is available, Pro-Prompt automatically searches DuckDuckGo for the task description, fetches top results, and injects relevant context into the prompt. This runs before generation and adds real-world grounding without any API keys.
+When internet is available, Prompturgy automatically searches DuckDuckGo for the task description, fetches top results, and injects relevant context into the prompt. This runs before generation and adds real-world grounding without any API keys.
 
 Toggle via the advanced settings menu (option `8`) or `--no-web` flag.
 
@@ -314,7 +314,7 @@ Generated manifests follow a **12-section structure**:
 ## Project Structure
 
 ```
-Pro-Prompt/
+Prompturgy/
   prompt_expert_enhance.py        # Main application — CLI + pre-processor (~2200 lines)
   web_server.py                   # Local web UI server (Flask, SSE streaming)
   prompt_expert_methodology.json  # 173 prompt engineering techniques (15 categories)
@@ -322,9 +322,9 @@ Pro-Prompt/
   install.sh                      # Installer — macOS / Linux
   install.ps1                     # Installer — Windows
   install_termux.sh               # Installer — Android / Termux
-  Pro_Prompt.command              # macOS double-click launcher (web UI)
-  Pro_Prompt.bat                  # Windows launcher (created by install.ps1)
-  Pro_Prompt                      # Linux/macOS terminal launcher (created by install.sh)
+  Prompturgy.command              # macOS double-click launcher (web UI)
+  Prompturgy.bat                  # Windows launcher (created by install.ps1)
+  Prompturgy                      # Linux/macOS terminal launcher (created by install.sh)
   tools/
     privacy_scan.py               # PII scanner — run before every push
   build_tools/                    # Implementation specs (reference docs)
@@ -337,15 +337,15 @@ Pro-Prompt/
 
 ## Troubleshooting
 
-**macOS says "Apple could not verify 'Pro-Prompt.app' is free of malware" and blocks it from opening.**
-This is macOS Gatekeeper — it flags any app downloaded from outside the App Store that isn't signed with a paid ($99/year) Apple Developer ID and notarized by Apple. Pro-Prompt is free and open-source, so it isn't notarized; the app itself is safe (the code is public in this repo — build it yourself with `build_app.py` if you want to verify). Two ways to open it anyway:
-- **Finder**: right-click (or Control-click) `Pro-Prompt.app` → **Open** → confirm **Open** in the dialog. This only needs to be done once.
-- **Terminal**: `xattr -cr /path/to/Pro-Prompt.app` (or `xattr -cr /Applications/Pro-Prompt.app` if you moved it there), then double-click normally.
+**macOS says "Apple could not verify 'Prompturgy.app' is free of malware" and blocks it from opening.**
+This is macOS Gatekeeper — it flags any app downloaded from outside the App Store that isn't signed with a paid ($99/year) Apple Developer ID and notarized by Apple. Prompturgy is free and open-source, so it isn't notarized; the app itself is safe (the code is public in this repo — build it yourself with `build_app.py` if you want to verify). Two ways to open it anyway:
+- **Finder**: right-click (or Control-click) `Prompturgy.app` → **Open** → confirm **Open** in the dialog. This only needs to be done once.
+- **Terminal**: `xattr -cr /path/to/Prompturgy.app` (or `xattr -cr /Applications/Prompturgy.app` if you moved it there), then double-click normally.
 
 **Safari shows "Safari ne parvient pas à ouvrir la page" / a WebKitErrorDomain:305 error, or the window opens blank.**
-This happens when Safari's **HTTPS-Only Mode** is set to apply to *all* websites (Safari → Settings → Advanced). In that mode Safari hard-blocks any plain `http://` navigation — including `localhost` and `127.0.0.1` — with no in-page bypass, since Pro-Prompt's local server intentionally has no TLS certificate (it never leaves your machine). Pro-Prompt already prefers Chrome/Firefox/Brave/Edge/Arc/Opera over Safari on macOS when one is installed, since none of them impose this restriction on loopback addresses. If Safari is your only browser, either:
+This happens when Safari's **HTTPS-Only Mode** is set to apply to *all* websites (Safari → Settings → Advanced). In that mode Safari hard-blocks any plain `http://` navigation — including `localhost` and `127.0.0.1` — with no in-page bypass, since Prompturgy's local server intentionally has no TLS certificate (it never leaves your machine). Prompturgy already prefers Chrome/Firefox/Brave/Edge/Arc/Opera over Safari on macOS when one is installed, since none of them impose this restriction on loopback addresses. If Safari is your only browser, either:
 - Safari → Settings → Advanced → turn off "Use HTTPS-Only for all websites", or
-- Install any other browser — Pro-Prompt will use it automatically next launch.
+- Install any other browser — Prompturgy will use it automatically next launch.
 
 ## Requirements
 
@@ -389,7 +389,7 @@ All settings persist in `settings.json` (gitignored, local to each user):
 ## How It Works
 
 1. **You describe a task** — in natural language, as simple or complex as you want
-2. **Pro-Prompt builds an expert prompt** — injecting selected techniques, web context, and session memory
+2. **Prompturgy builds an expert prompt** — injecting selected techniques, web context, and session memory
 3. **Local LLM generates a manifest** — a structured 12-section document describing the task with methodological precision
 4. **Optionally, two models generate in parallel** — and a synthesis pass merges them into a superior unified document
 5. **The output is a reproducible instruction set** — ready to be executed by any LLM agent (Claude, GPT, Gemini, Llama, Mistral, Qwen)
@@ -432,7 +432,7 @@ All settings persist in `settings.json` (gitignored, local to each user):
 
 ## Acknowledgments
 
-Pro-Prompt builds on decades of prompt engineering research from academic institutions and AI labs worldwide. Core theoretical foundations:
+Prompturgy builds on decades of prompt engineering research from academic institutions and AI labs worldwide. Core theoretical foundations:
 - Stanford, MIT, CMU, UC Berkeley research on language models and reasoning
 - OpenAI, Anthropic, DeepSeek, and open-source communities
 - Original technique papers and methodologies cited in `prompt_expert_methodology.json`

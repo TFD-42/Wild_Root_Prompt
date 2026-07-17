@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pro-Prompt — REST API usage via curl.
+# Prompturgy — REST API usage via curl.
 # Start the server first: python3 prompt_expert_enhance.py web --no-browser
 # Then run: bash examples/rest_api.sh
 # The server binds to 127.0.0.1 only — not reachable from other machines.

@@ -32,8 +32,8 @@ tcpdump*.txt
 tcpdump*.log
 
 # Generated launchers (created by installer, platform-specific)
-Pro_Prompt
-Pro_Prompt.bat
+Prompturgy
+Prompturgy.bat
 
 # Scratch / working files — never commit
 f1.json

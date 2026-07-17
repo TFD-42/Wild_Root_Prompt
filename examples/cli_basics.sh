@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pro-Prompt — CLI basics.
+# Prompturgy — CLI basics.
 # Run from the repo root: bash examples/cli_basics.sh
 # Requires: ollama serve running, at least one model pulled (e.g. `ollama pull llama3.2:3b`).
 set -e

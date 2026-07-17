@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Pro-Prompt — build a standalone, single-icon compiled app.
+Prompturgy — build a standalone, single-icon compiled app.
 
 Bundles app_entry.py (which launches the web UI) into one platform-native
 executable via PyInstaller:
-  macOS   -> dist/Pro-Prompt.app   (double-click, custom icon)
-  Windows -> dist/Pro-Prompt.exe   (double-click, custom icon)
-  Linux   -> dist/Pro-Prompt       (single binary; run from a terminal or
+  macOS   -> dist/Prompturgy.app   (double-click, custom icon)
+  Windows -> dist/Prompturgy.exe   (double-click, custom icon)
+  Linux   -> dist/Prompturgy       (single binary; run from a terminal or
                                      wire up a .desktop file for a menu icon)
 
 Usage:
@@ -22,7 +22,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 ENTRY_SCRIPT = BASE_DIR / "app_entry.py"
-APP_NAME = "Pro-Prompt"
+APP_NAME = "Prompturgy"
 
 DATA_FILES = ["prompt_expert_methodology.json", "prompt_templates.json"]
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pro-Prompt Web UI — Local web interface for novice users.
+Prompturgy Web UI — Local web interface for novice users.
 Served at http://localhost:7860 — no external connections.
 """
 
@@ -47,7 +47,7 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pro-Prompt — Local AI</title>
+<title>Prompturgy — Local AI</title>
 <style>
 :root {
   --bg: #0f1117;
@@ -270,7 +270,7 @@ input:checked + .slider:before { transform: translateX(18px); }
     <div>
       <label>Your Prompt</label>
       <textarea id="prompt" placeholder="Describe what you need. Can be short or messy — the pre-processor will clean it up.&#10;&#10;Example: explain quantum computing to a 12 year old"></textarea>
-      <div class="hint">Type your idea, task, or question. No need to be perfect — that's what Pro-Prompt is for.</div>
+      <div class="hint">Type your idea, task, or question. No need to be perfect — that's what Prompturgy is for.</div>
     </div>
 
     <!-- /slash metacommands -->
@@ -880,7 +880,7 @@ function downloadOutput() {
   const blob = new Blob([content], {type: mime})
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `pro-prompt-output.${ext}`
+  a.download = `prompturgy-output.${ext}`
   a.click()
 }
 
@@ -1078,7 +1078,7 @@ def run_web_server(port: int = 7860, open_browser: bool = True):
     set_backend_type(startup_settings.get("backend_type", "ollama"))
     set_backend_api_base(startup_settings.get("ollama_url", OLLAMA_URL))
 
-    print(f"\n  Pro-Prompt Web UI")
+    print(f"\n  Prompturgy Web UI")
     print(f"  ─────────────────────────────────────")
     print(f"  URL   : http://localhost:{port}")
     print(f"  Stop  : Ctrl+C")
@@ -1089,7 +1089,7 @@ def run_web_server(port: int = 7860, open_browser: bool = True):
             # Safari's "HTTPS-Only Mode", when set to apply to all sites
             # (not just per-site after an HTTPS visit), hard-blocks plain
             # http:// navigation to ANY host — including localhost and
-            # 127.0.0.1 — with no in-page bypass link. Since Pro-Prompt only
+            # 127.0.0.1 — with no in-page bypass link. Since Prompturgy only
             # serves plain HTTP locally, prefer a non-Safari browser on
             # macOS when one is installed, since none of them impose this
             # restriction on loopback addresses.
@@ -1111,8 +1111,8 @@ def run_web_server(port: int = 7860, open_browser: bool = True):
                         ["osascript", "-e",
                          'display notification '
                          '"If the page fails to load: Safari Settings > Advanced > turn off '
-                         '\\"Use HTTPS-Only for all websites\\", then reopen Pro-Prompt." '
-                         'with title "Pro-Prompt" subtitle "Opening ' + url + '"'],
+                         '\\"Use HTTPS-Only for all websites\\", then reopen Prompturgy." '
+                         'with title "Prompturgy" subtitle "Opening ' + url + '"'],
                         timeout=3,
                     )
                 except Exception:

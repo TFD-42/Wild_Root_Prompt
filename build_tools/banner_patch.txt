@@ -7,7 +7,7 @@ LOCATION: prompt_expert_enhance.py, print_banner() function
 CURRENT print_banner() output:
 -------------------------------
 ==============================================================
-   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.2
+   PROMPTURGY  —  Expert Prompt Enhancement Tool  v2.2
 ==============================================================
    Model A     : llama3:latest
    Model B     : qwen2.5:7b
@@ -22,7 +22,7 @@ CURRENT print_banner() output:
 NEW print_banner() output after patch:
 ---------------------------------------
 ==============================================================
-   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.2
+   PROMPTURGY  —  Expert Prompt Enhancement Tool  v2.2
 ==============================================================
    Model A     : llama3:latest
    Model B     : qwen2.5:7b
@@ -56,7 +56,7 @@ POSITION in the function:
 VERSION BUMP:
 -------------
 Bump banner version from v2.2 to v2.3 when this feature is released:
-    print("   PRO-PROMPT  —  Expert Prompt Enhancement Tool  v2.3")
+    print("   PROMPTURGY  —  Expert Prompt Enhancement Tool  v2.3")
 
 Also update the version constant if one exists in the file.
 Check: grep -n "v2\." prompt_expert_enhance.py

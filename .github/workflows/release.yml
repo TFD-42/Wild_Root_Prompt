@@ -15,14 +15,14 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            asset_name: Pro-Prompt-macOS.zip
-            build_path: dist/Pro-Prompt.app
+            asset_name: Prompturgy-macOS.zip
+            build_path: dist/Prompturgy.app
           - os: windows-latest
-            asset_name: Pro-Prompt-Windows.zip
-            build_path: dist/Pro-Prompt.exe
+            asset_name: Prompturgy-Windows.zip
+            build_path: dist/Prompturgy.exe
           - os: ubuntu-latest
-            asset_name: Pro-Prompt-Linux.zip
-            build_path: dist/Pro-Prompt
+            asset_name: Prompturgy-Linux.zip
+            build_path: dist/Prompturgy
 
     runs-on: ${{ matrix.os }}
 
@@ -46,19 +46,19 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           cd dist
-          zip -r ../${{ matrix.asset_name }} Pro-Prompt.app
+          zip -r ../${{ matrix.asset_name }} Prompturgy.app
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          Compress-Archive -Path dist/Pro-Prompt.exe -DestinationPath ${{ matrix.asset_name }}
+          Compress-Archive -Path dist/Prompturgy.exe -DestinationPath ${{ matrix.asset_name }}
         shell: pwsh
 
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           cd dist
-          zip ../${{ matrix.asset_name }} Pro-Prompt
+          zip ../${{ matrix.asset_name }} Prompturgy
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

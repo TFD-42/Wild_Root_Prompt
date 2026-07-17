@@ -1,3 +1,3 @@
 pyinstaller>=6.0.0
-# Only needed to run build_app.py (compile Pro-Prompt into a standalone app).
+# Only needed to run build_app.py (compile Prompturgy into a standalone app).
 # Not required for normal use — see requirements.txt / requirements-light.txt.

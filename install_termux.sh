@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Pro-Prompt Installer — Android / Termux
+#  Prompturgy Installer — Android / Termux
 #  Dedicated installer for Termux environment
 #  (Ollama not available on Android — configure remote server)
 # ============================================================
@@ -9,7 +9,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MAIN_SCRIPT="$SCRIPT_DIR/prompt_expert_enhance.py"
-LAUNCHER="$SCRIPT_DIR/Pro_Prompt"
+LAUNCHER="$SCRIPT_DIR/Prompturgy"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -24,12 +24,12 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $1"; }
 
 echo ""
 echo "============================================================"
-echo "   Pro-Prompt  —  Termux / Android Installer"
+echo "   Prompturgy  —  Termux / Android Installer"
 echo "============================================================"
 echo ""
 warn "Ollama does not run on Android/Termux."
 echo "  You need a remote Ollama server on your PC or a LAN server."
-echo "  After installation, set the Ollama URL in Pro-Prompt:"
+echo "  After installation, set the Ollama URL in Prompturgy:"
 echo "    Menu 8 > Ollama URL > http://<server-ip>:11434/api/generate"
 echo ""
 read -p "  Continue? [y/N] > " CONT
@@ -84,7 +84,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo ""
-echo "  Pro-Prompt — Termux Mode"
+echo "  Prompturgy — Termux Mode"
 echo "  ─────────────────────────"
 echo "  Note: Ollama must be running on a remote machine."
 echo "  Configure URL in menu 8 > Advanced settings."
@@ -126,6 +126,6 @@ echo ""
 echo "  Important — connect to your Ollama server:"
 echo "  1. Start Ollama on your PC"
 echo "  2. Allow LAN connections: OLLAMA_HOST=0.0.0.0 ollama serve"
-echo "  3. In Pro-Prompt menu 8, set Ollama URL to:"
+echo "  3. In Prompturgy menu 8, set Ollama URL to:"
 echo "     http://<your-pc-ip>:11434/api/generate"
 echo ""

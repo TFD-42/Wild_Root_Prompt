@@ -211,7 +211,7 @@ def simulate_output(repo_root: Path, tracked: List[Path]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pre-release PII scanner for Pro-Prompt.")
+    parser = argparse.ArgumentParser(description="Pre-release PII scanner for Prompturgy.")
     parser.add_argument("--fix", action="store_true", help="Auto-patch detected issues where possible")
     parser.add_argument("--dry-run", action="store_true", help="Show what --fix would change without applying")
     parser.add_argument("--simulate", action="store_true", default=True, help="Print simulated scan report (default: on)")
