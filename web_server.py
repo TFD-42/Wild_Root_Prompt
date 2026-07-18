@@ -50,18 +50,18 @@ HTML = r"""<!DOCTYPE html>
 <title>Wild_Root_Prompt — Local AI</title>
 <style>
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #22263a;
-  --border: #2e3250;
-  --accent: #5fae82;
-  --accent2: #a8e6c1;
-  --green: #8ed9ae;
-  --root: #8b6f47;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --text: #e2e8f0;
-  --muted: #8892a4;
+  --bg: #eaf7ee;
+  --surface: #ffffff;
+  --surface2: #e6f3ea;
+  --border: #cfe6d7;
+  --accent: #4c9c72;
+  --accent2: #2f8f5c;
+  --green: #3fae6a;
+  --root: #a9835a;
+  --yellow: #d9a441;
+  --red: #e2685f;
+  --text: #1f2b23;
+  --muted: #5e6b62;
   --radius: 10px;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
@@ -76,7 +76,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 /* Sidebar */
 .sidebar {
   background: var(--surface);
-  border-right: 2px solid var(--root);
+  border-right: 1px solid var(--root);
   display: flex; flex-direction: column;
   height: 100vh; overflow-y: auto; position: sticky; top: 0;
 }
