@@ -1285,6 +1285,13 @@ def query_ollama(
             "temperature": temperature,
             "num_predict": num_predict,
             "num_ctx": num_ctx,
+            # Long structured outputs (§-numbered sections) can get the model
+            # stuck repeating a whole prior block verbatim, especially with
+            # num_predict=-1 (no length cap) — the default repeat_last_n=64
+            # is too short a lookback to even notice a repeated multi-line
+            # block, so widen it alongside a slightly stronger penalty.
+            "repeat_penalty": 1.15,
+            "repeat_last_n": 256,
         },
     }
     try:
@@ -1369,6 +1376,8 @@ def query_ollama_stream(
             "temperature": temperature,
             "num_predict": num_predict,
             "num_ctx": num_ctx,
+            "repeat_penalty": 1.15,
+            "repeat_last_n": 256,
         },
     }
     full_text = []
