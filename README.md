@@ -327,7 +327,6 @@ Wild_Root_Prompt/
   WildRoot                      # Linux/macOS terminal launcher (created by install.sh)
   tools/
     privacy_scan.py               # PII scanner — run before every push
-  build_tools/                    # Implementation specs (reference docs)
   .gitignore
   README.md
   LICENSE
