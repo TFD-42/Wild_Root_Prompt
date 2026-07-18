@@ -99,6 +99,7 @@ textarea, select, input[type=range] {
 }
 textarea { padding: 12px; resize: vertical; min-height: 120px; line-height: 1.5; }
 textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+#prompt { background: var(--surface); box-shadow: inset 0 1px 3px rgba(31,43,35,.06); }
 select { padding: 10px 12px; cursor: pointer; }
 select option { background: var(--surface2); }
 
@@ -190,7 +191,7 @@ input:checked + .slider:before { transform: translateX(18px); }
 .pp-banner strong { color: var(--accent2); }
 .pp-banner .pp-hint { font-weight: 400; color: var(--muted); font-size: .78rem; }
 .pp-banner textarea.pp-text {
-  margin-top: 8px; width: 100%; min-height: 90px; resize: vertical;
+  margin-top: 8px; width: 100%; min-height: 220px; resize: vertical;
   color: var(--text); background: var(--surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: .82rem;
   white-space: pre-wrap; box-sizing: border-box;
@@ -703,7 +704,13 @@ async function streamSingle(task, model) {
           const d = JSON.parse(line.slice(5))
           if (d.phase === 'researching') setActiveStep('research')
           else if (d.phase === 'generating') setActiveStep('generate', ['research'])
-          else if (d.token) { lastOutput += d.token; $('output-single').textContent = lastOutput; setActiveStep('generate') }
+          else if (d.token) {
+            lastOutput += d.token
+            const el = $('output-single')
+            el.textContent = lastOutput
+            el.scrollTop = el.scrollHeight
+            setActiveStep('generate')
+          }
         } catch {}
       }
     }
@@ -739,7 +746,12 @@ async function streamParallel(task, modelA, modelB, withSynth = false) {
             const d = JSON.parse(line.slice(5))
             if (d.phase === 'researching') setActiveStep('research')
             else if (d.phase === 'generating') setActiveStep('generate', ['research'])
-            else if (d.token) { accumulator[0] += d.token; panel.textContent = accumulator[0]; setActiveStep('generate') }
+            else if (d.token) {
+              accumulator[0] += d.token
+              panel.textContent = accumulator[0]
+              panel.scrollTop = panel.scrollHeight
+              setActiveStep('generate')
+            }
           } catch {}
         }
       }
@@ -775,7 +787,12 @@ async function streamParallel(task, modelA, modelB, withSynth = false) {
           if (!line.startsWith('data:')) continue
           try {
             const d = JSON.parse(line.slice(5))
-            if (d.token) { synth += d.token; $('panel-synth').textContent = synth }
+            if (d.token) {
+              synth += d.token
+              const el = $('panel-synth')
+              el.textContent = synth
+              el.scrollTop = el.scrollHeight
+            }
           } catch {}
         }
       }
