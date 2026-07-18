@@ -901,20 +901,31 @@ def view_memory() -> str:
 # Internet detection & web research
 # ----------------------------------------------------------------------
 _internet_available: Optional[bool] = None
+_internet_checked_at: float = 0.0
+# A negative result is re-checked periodically instead of being cached for
+# the whole process lifetime — a one-off blip (VPN reconnecting, DNS not
+# ready yet at startup) used to permanently disable web search/enrichment
+# until the app was restarted.
+_INTERNET_RECHECK_SECONDS = 60.0
 
 
 def check_internet(timeout: float = 3.0) -> bool:
-    global _internet_available
-    if _internet_available is not None:
+    global _internet_available, _internet_checked_at
+    now = time.monotonic()
+    if _internet_available is not None and (
+        _internet_available or (now - _internet_checked_at) < _INTERNET_RECHECK_SECONDS
+    ):
         return _internet_available
     for url in ("https://duckduckgo.com/", "https://www.google.com/"):
         try:
             requests.head(url, timeout=timeout, allow_redirects=True)
             _internet_available = True
+            _internet_checked_at = now
             return True
         except Exception:
             continue
     _internet_available = False
+    _internet_checked_at = now
     return False
 
 
